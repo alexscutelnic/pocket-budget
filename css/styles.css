@@ -376,7 +376,7 @@ button {
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-top: 0.5px solid var(--separator);
-  padding: 6px 0 calc(4px + var(--safe-bottom));
+  padding: 4px 0 var(--safe-bottom);
   flex-shrink: 0;
 }
 
@@ -385,8 +385,9 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  padding: 4px 0;
+  padding: 3px 0;
   color: var(--label-secondary);
 }
 
@@ -404,7 +405,13 @@ button {
 --------------------------------------------------------------------- */
 .sheet-backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Tracks the real visible viewport (see app.js) instead of the full layout
+     viewport, so the keyboard opening doesn't leave the sheet's bottom half
+     (and whatever input you just tapped) hidden behind it on iOS Safari. */
+  height: var(--app-vh, 100vh);
   background: rgba(0, 0, 0, 0.35);
   z-index: 30;
   display: flex;
@@ -417,7 +424,7 @@ button {
 .sheet {
   background: var(--bg-primary);
   width: 100%;
-  max-height: 90vh;
+  max-height: 90%;
   border-radius: 16px 16px 0 0;
   overflow-y: auto;
   padding-bottom: calc(16px + var(--safe-bottom));

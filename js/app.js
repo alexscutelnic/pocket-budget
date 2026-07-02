@@ -47,11 +47,27 @@ function initialTab() {
   return TAB_ICONS.includes(fromHash) ? fromHash : 'home';
 }
 
+// iOS Safari keeps `position: fixed` elements sized against the full layout
+// viewport even when the on-screen keyboard is open, so a bottom sheet can
+// end up with its lower half — including whatever input you just tapped —
+// hidden behind the keyboard. Track the real visible height via
+// VisualViewport and expose it as a CSS variable the sheet uses instead.
+function setupViewportTracking() {
+  if (!window.visualViewport) return;
+  const update = () => {
+    document.documentElement.style.setProperty('--app-vh', `${window.visualViewport.height}px`);
+  };
+  window.visualViewport.addEventListener('resize', update);
+  window.visualViewport.addEventListener('scroll', update);
+  update();
+}
+
 async function main() {
   await initDB();
   const settings = await getSettings();
   setCurrency(settings.currency);
   paintTabIcons();
+  setupViewportTracking();
 
   tabBar.addEventListener('click', (e) => {
     const btn = e.target.closest('.tab-btn');
