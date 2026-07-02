@@ -8,7 +8,7 @@ import {
   softDeletePotEntry,
 } from '../db.js';
 import { todayISODateString } from '../period.js';
-import { formatMoney, parseAmountToMinor, formatShortDate, formatLongDate, escapeHtml } from '../format.js';
+import { formatMoney, parseAmountToMinor, formatShortDate, formatLongDate, currencySymbol, escapeHtml } from '../format.js';
 import { icon, POT_ICON_KEYS } from '../icons.js';
 import { paletteColor } from '../palette.js';
 
@@ -216,7 +216,7 @@ export async function mount(root) {
 
           <div class="field-group" style="margin-top:12px;">
             <p class="field-label">Target amount</p>
-            <input id="pot-target" type="text" inputmode="decimal" placeholder="£0.00" value="${targetValue}" />
+            <input id="pot-target" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${targetValue}" />
           </div>
 
           <div class="field-group">
@@ -278,7 +278,7 @@ export async function mount(root) {
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
 
-          <input id="entry-amount" class="amount-input" type="text" inputmode="decimal" placeholder="£0.00" value="${amountValue}" />
+          <input id="entry-amount" class="amount-input" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${amountValue}" />
 
           <div class="field-group">
             <p class="field-label">Note (optional)</p>

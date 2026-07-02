@@ -9,7 +9,7 @@ import {
   listPotEntries,
 } from '../db.js';
 import { getPeriodForDate, todayISODateString } from '../period.js';
-import { formatMoney, parseAmountToMinor, formatShortDate, escapeHtml } from '../format.js';
+import { formatMoney, parseAmountToMinor, formatShortDate, currencySymbol, escapeHtml } from '../format.js';
 import { icon } from '../icons.js';
 import { paletteColor } from '../palette.js';
 
@@ -266,7 +266,7 @@ export async function mount(root) {
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
 
-          <input id="tx-amount" class="amount-input" type="text" inputmode="decimal" placeholder="£0.00" value="${amountValue}" />
+          <input id="tx-amount" class="amount-input" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${amountValue}" />
 
           <div class="field-group">
             <p class="field-label">Category</p>

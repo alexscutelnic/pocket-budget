@@ -1,4 +1,5 @@
-import { initDB } from './db.js';
+import { initDB, getSettings } from './db.js';
+import { setCurrency } from './format.js';
 import { icon } from './icons.js';
 import * as homeScreen from './screens/home.js';
 import * as potsScreen from './screens/pots.js';
@@ -48,6 +49,8 @@ function initialTab() {
 
 async function main() {
   await initDB();
+  const settings = await getSettings();
+  setCurrency(settings.currency);
   paintTabIcons();
 
   tabBar.addEventListener('click', (e) => {

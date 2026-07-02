@@ -9,9 +9,22 @@ import {
   importAll,
 } from '../db.js';
 import { todayISODateString } from '../period.js';
-import { formatMoney, parseAmountToMinor, escapeHtml } from '../format.js';
+import { formatMoney, parseAmountToMinor, currencySymbol, setCurrency, escapeHtml } from '../format.js';
 import { icon, CATEGORY_ICON_KEYS } from '../icons.js';
 import { paletteColor } from '../palette.js';
+
+const CURRENCIES = [
+  { code: 'GBP', name: 'British Pound' },
+  { code: 'USD', name: 'US Dollar' },
+  { code: 'EUR', name: 'Euro' },
+  { code: 'CAD', name: 'Canadian Dollar' },
+  { code: 'AUD', name: 'Australian Dollar' },
+  { code: 'NZD', name: 'New Zealand Dollar' },
+  { code: 'JPY', name: 'Japanese Yen' },
+  { code: 'CHF', name: 'Swiss Franc' },
+  { code: 'INR', name: 'Indian Rupee' },
+  { code: 'ZAR', name: 'South African Rand' },
+];
 
 function ordinal(n) {
   const suffixes = ['th', 'st', 'nd', 'rd'];
@@ -56,6 +69,11 @@ export async function mount(root) {
         <div class="list-row tappable" data-action="edit-reset-day">
           <div style="flex:1;">Reset Day</div>
           <div style="color:var(--label-secondary);">${ordinal(settings.resetDay)}</div>
+          <span class="chevron">${icon('chevron', { size: 16 })}</span>
+        </div>
+        <div class="list-row tappable" data-action="edit-currency">
+          <div style="flex:1;">Currency</div>
+          <div style="color:var(--label-secondary);">${settings.currency} (${currencySymbol(settings.currency)})</div>
           <span class="chevron">${icon('chevron', { size: 16 })}</span>
         </div>
       </div>
@@ -108,6 +126,42 @@ export async function mount(root) {
     return rows + addRow;
   }
 
+  // ---- Currency sheet -----------------------------------------------------
+
+  function openCurrencySheet() {
+    sheet = { type: 'currency' };
+    render();
+  }
+
+  function renderCurrencySheet() {
+    const rows = CURRENCIES.map((c) => `
+      <div class="list-row tappable" data-action="select-currency" data-code="${c.code}">
+        <div style="flex:1;">${c.name} <span style="color:var(--label-secondary);">(${currencySymbol(c.code)})</span></div>
+        ${c.code === settings.currency ? icon('checkmark', { size: 18 }) : ''}
+      </div>`).join('');
+
+    return `
+      <div class="sheet-backdrop">
+        <div class="sheet">
+          <div class="sheet-header">
+            <h2>Currency</h2>
+            <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
+          </div>
+          <div class="card" style="margin:0 16px 16px;">${rows}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function selectCurrency(code) {
+    await updateSettings({ currency: code });
+    setCurrency(code);
+    sheet = null;
+    // Reload so every screen's money formatting consistently picks up the
+    // new currency, rather than only whatever's currently mounted.
+    window.location.reload();
+  }
+
   // ---- Income sheet -----------------------------------------------------
 
   function openIncomeSheet() {
@@ -124,7 +178,7 @@ export async function mount(root) {
             <h2>Monthly Income</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
-          <input id="income-amount" class="amount-input" type="text" inputmode="decimal" placeholder="£0.00" value="${value}" />
+          <input id="income-amount" class="amount-input" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${value}" />
           <button id="income-save" class="save-btn" data-action="save-income">Save</button>
         </div>
       </div>
@@ -216,7 +270,7 @@ export async function mount(root) {
 
           <div class="field-group" style="margin-top:12px;">
             <p class="field-label">Limit per period</p>
-            <input id="cat-limit" type="text" inputmode="decimal" placeholder="£0.00" value="${limitValue}" />
+            <input id="cat-limit" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${limitValue}" />
             <p id="cat-limit-warning" class="field-warning"></p>
           </div>
 
@@ -310,6 +364,7 @@ export async function mount(root) {
   // ---- Sheet dispatch -------------------------------------------------
 
   function renderSheet() {
+    if (sheet.type === 'currency') return renderCurrencySheet();
     if (sheet.type === 'income') return renderIncomeSheet();
     if (sheet.type === 'reset-day') return renderResetDaySheet();
     return renderCategorySheet();
@@ -369,6 +424,8 @@ export async function mount(root) {
     const action = actionEl.dataset.action;
 
     if (action === 'close-sheet') { sheet = null; return render(); }
+    if (action === 'edit-currency') return openCurrencySheet();
+    if (action === 'select-currency') return selectCurrency(actionEl.dataset.code);
     if (action === 'edit-income') return openIncomeSheet();
     if (action === 'save-income') return saveIncomeSheet();
     if (action === 'edit-reset-day') return openResetDaySheet();
