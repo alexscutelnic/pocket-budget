@@ -157,7 +157,7 @@ export async function mount(root) {
           </div>
           <div class="field-group">
             <p class="field-label">Day of month your pay cycle resets (1–31)</p>
-            <input id="reset-day-input" type="number" inputmode="numeric" min="1" max="31" value="${sheet.defaults.day}" />
+            <input id="reset-day-input" type="text" inputmode="numeric" value="${sheet.defaults.day}" />
           </div>
           <button id="reset-day-save" class="save-btn" data-action="save-reset-day">Save</button>
         </div>
