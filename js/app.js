@@ -49,16 +49,23 @@ function initialTab() {
 
 // iOS Safari keeps `position: fixed` elements sized against the full layout
 // viewport even when the on-screen keyboard is open, so a bottom sheet can
-// end up with its lower half — including whatever input you just tapped —
-// hidden behind the keyboard. Track the real visible height via
-// VisualViewport and expose it as a CSS variable the sheet uses instead.
+// end up with its lower half hidden behind the keyboard. Track the real
+// visible height AND its offset via VisualViewport — offsetTop matters too:
+// iOS scrolls the page to keep a focused input visible while the keyboard
+// opens/closes, and a fixed element that ignores that scroll ends up
+// mispositioned (dropping behind the tab bar) once the keyboard animation
+// settles. Re-check after focus changes too, since the resize/scroll events
+// don't always fire promptly around the exact moment the keyboard closes.
 function setupViewportTracking() {
   if (!window.visualViewport) return;
   const update = () => {
     document.documentElement.style.setProperty('--app-vh', `${window.visualViewport.height}px`);
+    document.documentElement.style.setProperty('--app-vh-offset', `${window.visualViewport.offsetTop}px`);
   };
   window.visualViewport.addEventListener('resize', update);
   window.visualViewport.addEventListener('scroll', update);
+  document.addEventListener('focusin', () => setTimeout(update, 50));
+  document.addEventListener('focusout', () => setTimeout(update, 50));
   update();
 }
 
