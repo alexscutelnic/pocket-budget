@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Pocket Budget</title>
+<meta name="description" content="A personal budget tracker for iPhone." />
+
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Budget" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<div id="app">
+  <main id="screen-container" class="screen-container"></main>
+
+  <nav id="tab-bar" class="tab-bar">
+    <button class="tab-btn" data-tab="home" aria-label="Home">
+      <span class="tab-icon" data-icon="home"></span>
+      <span class="tab-label">Home</span>
+    </button>
+    <button class="tab-btn" data-tab="pots" aria-label="Pots">
+      <span class="tab-icon" data-icon="pots"></span>
+      <span class="tab-label">Pots</span>
+    </button>
+    <button class="tab-btn" data-tab="trends" aria-label="Trends">
+      <span class="tab-icon" data-icon="trends"></span>
+      <span class="tab-label">Trends</span>
+    </button>
+    <button class="tab-btn" data-tab="settings" aria-label="Settings">
+      <span class="tab-icon" data-icon="settings"></span>
+      <span class="tab-label">Settings</span>
+    </button>
+  </nav>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
