@@ -62,6 +62,8 @@ export function barChart(bars, { width = 328, height = 150, barMaxWidth = 28, va
 // Stacked bar chart — spend by category per period. Categories keep a fixed
 // slot/color across the whole app (see js/palette.js); a legend is always
 // shown since this chart has >1 series (categorical color rule).
+const SEGMENT_LABEL_MIN_HEIGHT = 16; // below this, "NN%" won't fit with padding — skip it, per marks spec
+
 export function stackedBarChart(periods, series, { width = 328, height = 150, barMaxWidth = 28 } = {}) {
   const padTop = 10;
   const padBottom = 20;
@@ -77,6 +79,7 @@ export function stackedBarChart(periods, series, { width = 328, height = 150, ba
     const cx = slot * i + slot / 2;
     const x = cx - barW / 2;
     const activeSeries = series.filter((s) => (s.valuesByPeriod[p.key] || 0) > 0);
+    const periodTotal = totals[i];
     let cumulative = 0;
     const segs = activeSeries.map((s, segIdx) => {
       const value = s.valuesByPeriod[p.key] || 0;
@@ -89,9 +92,16 @@ export function stackedBarChart(periods, series, { width = 328, height = 150, ba
       const h = Math.max(0, yBottomPx - yTopPx);
       cumulative = segTop;
       if (h <= 0) return '';
-      return isLast
+      const shape = isLast
         ? `<path d="${roundedTopPath(x, yTopPx, barW, h, 4)}" fill="${s.color}"/>`
         : `<rect x="${x}" y="${yTopPx}" width="${barW}" height="${h}" fill="${s.color}"/>`;
+      let label = '';
+      if (h >= SEGMENT_LABEL_MIN_HEIGHT && periodTotal > 0) {
+        const pct = Math.round((value / periodTotal) * 100);
+        const labelY = yTopPx + h / 2 + 3.5;
+        label = `<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="10" font-weight="600" fill="${s.textColor || 'var(--label-primary)'}">${pct}%</text>`;
+      }
+      return shape + label;
     }).join('');
     const tick = `<text x="${cx}" y="${height - 4}" text-anchor="middle" font-size="11" fill="var(--label-secondary)">${escapeXml(p.label)}</text>`;
     return `<g>${segs}${tick}</g>`;
@@ -154,9 +164,11 @@ export function lineChart(points, { width = 328, height = 130, color = 'var(--gr
   `;
 }
 
+// Pass an `id` per item to make it tappable — the caller handles
+// `data-action="select-legend-item"` / `data-id` via its own delegation.
 export function legend(items) {
   return `<div class="chart-legend">${items.map((it) => `
-    <div class="legend-item">
+    <div class="legend-item ${it.id ? 'legend-item-tappable' : ''}" ${it.id ? `data-action="select-legend-item" data-id="${it.id}"` : ''}>
       <span class="legend-swatch" style="background:${it.color}"></span>
       <span class="legend-label">${escapeXml(it.label)}</span>
     </div>`).join('')}</div>`;

@@ -2,6 +2,8 @@
 // Every record has id / createdAt / updatedAt; transactions & potEntries
 // are soft-deleted via deletedAt so a future sync backend is a bolt-on.
 
+import { nextColorIndex } from './palette.js';
+
 const DB_NAME = 'pocket-budget';
 const DB_VERSION = 1;
 
@@ -121,6 +123,7 @@ export async function initDB() {
   const categories = await getAll('categories');
   if (categories.length === 0) {
     let sortOrder = 0;
+    let colorIndex = 0;
     for (const c of DEFAULT_CATEGORIES) {
       await put('categories', {
         id: uuid(),
@@ -128,11 +131,28 @@ export async function initDB() {
         icon: c.icon,
         limitMinor: c.limitMinor,
         sortOrder: sortOrder++,
+        colorIndex: colorIndex++,
         archivedAt: null,
         createdAt: now(),
         updatedAt: now(),
       });
     }
+  }
+
+  // Backfill colorIndex for records created before it existed, so upgrades
+  // from an earlier version still get stable, collision-free colors.
+  await backfillColorIndexes('categories');
+  await backfillColorIndexes('pots');
+}
+
+async function backfillColorIndexes(storeName) {
+  const records = await getAll(storeName);
+  const used = records.map((r) => r.colorIndex).filter((v) => v != null);
+  for (const r of records) {
+    if (r.colorIndex != null) continue;
+    const colorIndex = nextColorIndex(used);
+    used.push(colorIndex);
+    await put(storeName, { ...r, colorIndex, updatedAt: now() });
   }
 }
 
@@ -168,6 +188,7 @@ export async function addCategory({ name, icon, limitMinor, sortOrder }) {
     icon,
     limitMinor,
     sortOrder: sortOrder ?? all.length,
+    colorIndex: nextColorIndex(all.map((c) => c.colorIndex)),
     archivedAt: null,
     createdAt: now(),
     updatedAt: now(),
@@ -232,12 +253,14 @@ export async function listPots({ includeArchived = false } = {}) {
 }
 
 export async function addPot({ name, icon, targetMinor, targetDate = null }) {
+  const all = await getAll('pots');
   const record = {
     id: uuid(),
     name,
     icon,
     targetMinor,
     targetDate,
+    colorIndex: nextColorIndex(all.map((p) => p.colorIndex)),
     archivedAt: null,
     createdAt: now(),
     updatedAt: now(),

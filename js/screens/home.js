@@ -11,7 +11,7 @@ import {
 import { getPeriodForDate, todayISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, formatShortDate, escapeHtml } from '../format.js';
 import { icon } from '../icons.js';
-import { stableColorForId } from '../palette.js';
+import { paletteColor } from '../palette.js';
 
 function progressClass(ratio) {
   if (ratio > 1) return 'over';
@@ -87,7 +87,7 @@ export async function mount(root) {
       return `
         <div class="list-row category-row tappable" data-action="open-category" data-category-id="${c.id}">
           <div class="category-top">
-            <div class="icon-bubble" style="background:${stableColorForId(c.id)}">${icon(c.icon)}</div>
+            <div class="icon-bubble" style="background:${paletteColor(c.colorIndex)}">${icon(c.icon)}</div>
             <div class="category-name">${escapeHtml(c.name)}</div>
             <div class="category-amounts"><strong>${formatMoney(spent)}</strong> / ${formatMoney(c.limitMinor)}</div>
             <span class="chevron">${icon('chevron')}</span>
@@ -199,7 +199,7 @@ export async function mount(root) {
         <button class="back-btn" data-action="back-to-list">${icon('chevron', { className: 'back-chevron' })}<span>Home</span></button>
       </div>
       <div class="large-title-header">
-        <div class="icon-bubble" style="background:${stableColorForId(category.id)};margin-bottom:8px;">${icon(category.icon)}</div>
+        <div class="icon-bubble" style="background:${paletteColor(category.colorIndex)};margin-bottom:8px;">${icon(category.icon)}</div>
         <h1 class="title">${escapeHtml(category.name)}</h1>
         <p class="subtitle">${formatMoney(spent)} of ${formatMoney(category.limitMinor)} · ${period.label}</p>
       </div>
@@ -252,7 +252,7 @@ export async function mount(root) {
   function renderSheet() {
     const chips = categories.map((c) => `
       <div class="category-chip ${c.id === sheet.categoryId ? 'selected' : ''}" data-action="select-category" data-category-id="${c.id}">
-        <div class="icon-bubble" style="background:${stableColorForId(c.id)}">${icon(c.icon)}</div>
+        <div class="icon-bubble" style="background:${paletteColor(c.colorIndex)}">${icon(c.icon)}</div>
         <div class="chip-label">${escapeHtml(c.name)}</div>
       </div>`).join('');
 

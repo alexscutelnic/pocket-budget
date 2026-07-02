@@ -11,7 +11,7 @@ import {
 import { todayISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, escapeHtml } from '../format.js';
 import { icon, CATEGORY_ICON_KEYS } from '../icons.js';
-import { stableColorForId } from '../palette.js';
+import { paletteColor } from '../palette.js';
 
 function ordinal(n) {
   const suffixes = ['th', 'st', 'nd', 'rd'];
@@ -90,7 +90,7 @@ export async function mount(root) {
   function renderCategoryRows() {
     const rows = categories.map((c, i) => `
       <div class="list-row tappable" data-action="edit-category" data-category-id="${c.id}">
-        <div class="icon-bubble" style="background:${stableColorForId(c.id)}">${icon(c.icon)}</div>
+        <div class="icon-bubble" style="background:${paletteColor(c.colorIndex)}">${icon(c.icon)}</div>
         <div style="flex:1;min-width:0;">
           <div>${escapeHtml(c.name)}</div>
           <div style="font-size:13px;color:var(--label-secondary);">${formatMoney(c.limitMinor)} per period</div>
@@ -206,6 +206,7 @@ export async function mount(root) {
           <div class="field-group">
             <p class="field-label">Name</p>
             <input id="cat-name" type="text" placeholder="e.g. Groceries" value="${escapeHtml(sheet.defaults.name)}" />
+            <p id="cat-name-warning" class="field-warning"></p>
           </div>
 
           <div class="field-group">
@@ -216,6 +217,7 @@ export async function mount(root) {
           <div class="field-group" style="margin-top:12px;">
             <p class="field-label">Limit per period</p>
             <input id="cat-limit" type="text" inputmode="decimal" placeholder="£0.00" value="${limitValue}" />
+            <p id="cat-limit-warning" class="field-warning"></p>
           </div>
 
           <button id="cat-save" class="save-btn" data-action="save-category">Save</button>
@@ -225,10 +227,16 @@ export async function mount(root) {
     `;
   }
 
+  function isDuplicateName(name) {
+    if (!name) return false;
+    const normalized = name.trim().toLowerCase();
+    return categories.some((c) => c.id !== sheet.categoryId && c.name.trim().toLowerCase() === normalized);
+  }
+
   async function saveCategorySheet() {
     const name = root.querySelector('#cat-name').value.trim();
     const limitMinor = parseAmountToMinor(root.querySelector('#cat-limit').value);
-    if (!name || limitMinor == null || limitMinor <= 0) return;
+    if (!name || limitMinor == null || limitMinor <= 0 || isDuplicateName(name)) return;
 
     const payload = { name, icon: sheet.icon, limitMinor };
     if (sheet.mode === 'edit') {
@@ -321,7 +329,29 @@ export async function mount(root) {
       const name = root.querySelector('#cat-name')?.value.trim();
       const limit = parseAmountToMinor(root.querySelector('#cat-limit')?.value);
       const btn = root.querySelector('#cat-save');
-      if (btn) btn.disabled = !name || limit == null || limit <= 0;
+      const duplicate = isDuplicateName(name);
+      const nameWarningEl = root.querySelector('#cat-name-warning');
+      if (nameWarningEl) nameWarningEl.textContent = duplicate ? `A category named "${name}" already exists.` : '';
+      if (btn) btn.disabled = !name || limit == null || limit <= 0 || duplicate;
+      updateLimitWarning(limit);
+    }
+  }
+
+  function updateLimitWarning(limitMinor) {
+    const warningEl = root.querySelector('#cat-limit-warning');
+    if (!warningEl) return;
+    if (!settings.incomeMinor || limitMinor == null || limitMinor <= 0) {
+      warningEl.textContent = '';
+      return;
+    }
+    const otherLimitsTotal = categories
+      .filter((c) => c.id !== sheet.categoryId)
+      .reduce((sum, c) => sum + c.limitMinor, 0);
+    const newTotal = otherLimitsTotal + limitMinor;
+    if (newTotal > settings.incomeMinor) {
+      warningEl.textContent = `Category limits would total ${formatMoney(newTotal)} of ${formatMoney(settings.incomeMinor)} income.`;
+    } else {
+      warningEl.textContent = '';
     }
   }
 

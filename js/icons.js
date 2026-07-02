@@ -26,6 +26,10 @@ const PATHS = {
   heart: '<path d="M12 20s-7-4.2-9.4-8.4C.9 8.1 2.2 4.7 5.4 4.7c2 0 3.3 1 3.9 1.9.6-.9 1.9-1.9 3.9-1.9 3.2 0 4.5 3.4 2.8 6.9C19 15.8 12 20 12 20Z"/>',
   shield: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3Z"/><path d="M9 12l2 2 4-4"/>',
   gift: '<rect x="4" y="9.5" width="16" height="10.5" rx="1.5"/><rect x="3.5" y="6.5" width="17" height="3" rx="1"/><path d="M12 6.5v13.5"/><path d="M12 6.5c0-2.8 2.2-4.5 3.6-3.3 1.4 1.2.4 3.3-3.6 3.3Z"/><path d="M12 6.5c0-2.8-2.2-4.5-3.6-3.3-1.4 1.2-.4 3.3 3.6 3.3Z"/>',
+  'wine-glass': '<path d="M8 3h8c0 4.5-1.2 7.5-4 7.5S8 7.5 8 3Z"/><path d="M12 10.5V20"/><path d="M8.3 20.5h7.4"/>',
+  tag: '<path d="M11 4H5a1 1 0 0 0-1 1v6a1 1 0 0 0 .3.7l9 9a1 1 0 0 0 1.4 0l6-6a1 1 0 0 0 0-1.4l-9-9A1 1 0 0 0 11 4Z"/><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none"/>',
+  paw: '<circle cx="7" cy="8.2" r="1.8"/><circle cx="12" cy="6.2" r="1.8"/><circle cx="17" cy="8.2" r="1.8"/><path d="M8 13c-2.4 0-4 1.9-4 3.8 0 1.7 1.7 2.8 3.3 1.9 1-.6 1.8-1 4.7-1s3.7.4 4.7 1c1.6.9 3.3-.2 3.3-1.9 0-1.9-1.6-3.8-4-3.8-2 0-2.9 1-4 1s-2-1-4-1Z"/>',
+  medical: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
 };
 
 export function icon(name, { size = 24, className = '' } = {}) {
@@ -33,5 +37,8 @@ export function icon(name, { size = 24, className = '' } = {}) {
   return `<svg class="icon ${className}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
 }
 
-export const CATEGORY_ICON_KEYS = ['cart', 'fork-knife', 'car', 'doc-text', 'game-controller', 'bag', 'ellipsis'];
+export const CATEGORY_ICON_KEYS = [
+  'cart', 'fork-knife', 'car', 'doc-text', 'game-controller', 'bag', 'ellipsis',
+  'heart', 'gift', 'wine-glass', 'tag', 'paw', 'medical', 'home',
+];
 export const POT_ICON_KEYS = ['pots', 'star', 'plane', 'heart', 'home', 'shield', 'gift', 'bag'];

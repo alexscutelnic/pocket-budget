@@ -9,12 +9,10 @@ const TAB_ICONS = ['home', 'pots', 'trends', 'settings'];
 const container = document.getElementById('screen-container');
 const tabBar = document.getElementById('tab-bar');
 
-let currentTab = null;
-
+// Re-mounts on every tap, even the already-active tab — tapping the current
+// tab again should reset it to its root view (standard iOS tab-bar behavior),
+// not no-op.
 async function renderTab(tab) {
-  if (tab === currentTab) return;
-  currentTab = tab;
-
   tabBar.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });

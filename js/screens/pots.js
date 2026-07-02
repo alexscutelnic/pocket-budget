@@ -10,7 +10,7 @@ import {
 import { todayISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, formatShortDate, formatLongDate, escapeHtml } from '../format.js';
 import { icon, POT_ICON_KEYS } from '../icons.js';
-import { stableColorForId } from '../palette.js';
+import { paletteColor } from '../palette.js';
 
 function ringColor(ratio) {
   return ratio >= 1 ? 'var(--green)' : 'var(--blue)';
@@ -65,7 +65,7 @@ export async function mount(root) {
       return `
         <div class="list-row pot-row tappable" data-action="open-pot" data-pot-id="${p.id}">
           <div class="pot-top">
-            <div class="icon-bubble" style="background:${stableColorForId(p.id)}">${icon(p.icon)}</div>
+            <div class="icon-bubble" style="background:${paletteColor(p.colorIndex)}">${icon(p.icon)}</div>
             <div class="pot-name">${escapeHtml(p.name)}</div>
             <div class="pot-amounts"><strong>${formatMoney(saved)}</strong> / ${formatMoney(p.targetMinor)}</div>
             <span class="chevron">${icon('chevron')}</span>
