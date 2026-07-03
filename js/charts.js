@@ -117,9 +117,9 @@ export function stackedBarChart(periods, series, { width = 328, height = 150, ba
 
 // Single-series line chart — e.g. total savings over time. No legend needed
 // (one series; the card title already names it) — end point is direct-labeled.
-export function lineChart(points, { width = 328, height = 130, color = 'var(--green)', valueFormatter = String } = {}) {
+export function lineChart(points, { width = 328, height = 140, color = 'var(--green)', valueFormatter = String } = {}) {
   const padTop = 24;
-  const padBottom = 10;
+  const padBottom = 20;
   const padX = 8;
   const chartH = height - padTop - padBottom;
   const values = points.map((p) => p.value);
@@ -150,7 +150,7 @@ export function lineChart(points, { width = 328, height = 130, color = 'var(--gr
 
   const ticks = points.map((p, i) => {
     const [x] = coords[i];
-    return `<text x="${x}" y="${height - 2}" text-anchor="middle" font-size="10" fill="var(--label-secondary)">${escapeXml(p.label)}</text>`;
+    return `<text x="${x}" y="${height - 4}" text-anchor="middle" font-size="10" fill="var(--label-secondary)">${escapeXml(p.label)}</text>`;
   }).join('');
 
   return `

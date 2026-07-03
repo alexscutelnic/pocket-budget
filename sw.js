@@ -1,5 +1,5 @@
 // Cache-first app shell so the app opens offline after first load.
-const CACHE_NAME = 'pocket-budget-v21';
+const CACHE_NAME = 'pocket-budget-v22';
 const APP_SHELL = [
   './',
   './index.html',
