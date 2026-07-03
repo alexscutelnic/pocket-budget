@@ -102,10 +102,13 @@ button {
   height: 100dvh;
 }
 
+/* No -webkit-overflow-scrolling: touch here — it's momentum-scroll by
+   default since iOS 13, and on iOS the property forces this container into
+   its own stacking context, trapping the sheets' z-index inside it so the
+   tab bar (a later sibling) paints over a sheet's bottom edge / Save button. */
 .screen-container {
   flex: 1;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   padding-bottom: calc(64px + var(--safe-bottom) + 24px);
   position: relative;
 }
@@ -429,6 +432,7 @@ button {
   max-height: 90%;
   border-radius: 16px 16px 0 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-bottom: calc(16px + var(--safe-bottom));
   animation: slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
