@@ -84,11 +84,8 @@ export async function mount(root) {
 
   function renderContent() {
     const periodStats = chronological.map(periodStatsFor);
-    const thisPeriod = periodStats[periodStats.length - 1];
-    const lastPeriod = periodStats[periodStats.length - 2];
 
     return `
-      ${allTx.length > 0 ? renderComparisonCard(thisPeriod, lastPeriod) : ''}
       ${renderPeriodPaceCard()}
       ${renderSpendPerPeriodCard(periodStats)}
       ${renderSpendByCategoryCard(periodStats)}
@@ -102,37 +99,6 @@ export async function mount(root) {
       <h3>Nothing to show yet</h3>
       <p>Once you've logged some spending or added money to a pot, your trends will show up here.</p>
     </div>`;
-  }
-
-  function renderComparisonCard(thisPeriod, lastPeriod) {
-    const delta = thisPeriod.total - lastPeriod.total;
-    const up = delta > 0;
-    const deltaLabel = delta === 0 ? 'No change' : `${up ? '+' : '−'}${formatMoney(Math.abs(delta))} vs last period`;
-    const deltaColor = delta === 0 ? 'var(--label-secondary)' : (up ? 'var(--red)' : 'var(--green)');
-
-    let mover = null;
-    let moverDiff = 0;
-    categories.forEach((c) => {
-      const diff = (thisPeriod.byCategory[c.id] || 0) - (lastPeriod.byCategory[c.id] || 0);
-      if (Math.abs(diff) > Math.abs(moverDiff)) { moverDiff = diff; mover = c; }
-    });
-
-    return `
-      <div class="card summary-card">
-        <div class="summary-row">
-          <span class="summary-spent">${formatMoney(thisPeriod.total)}</span>
-          <span class="summary-limit">${thisPeriod.period.label}</span>
-        </div>
-        <p class="summary-caption" style="color:${deltaColor}">
-          ${delta !== 0 ? icon(up ? 'arrow-up-circle' : 'arrow-down-circle', { size: 14 }) : ''} ${deltaLabel}
-        </p>
-        ${mover && moverDiff !== 0 ? `
-          <div class="mover-row">
-            <span class="mover-label">Biggest mover</span>
-            <span class="mover-value">${escapeHtml(mover.name)} ${moverDiff > 0 ? '+' : '−'}${formatMoney(Math.abs(moverDiff))}</span>
-          </div>` : ''}
-      </div>
-    `;
   }
 
   // Cumulative spend by day, this period vs the same day-of-period last
@@ -180,6 +146,24 @@ export async function mount(root) {
       ? 'Level with this point last period'
       : `${formatMoney(Math.abs(delta))} ${up ? 'more' : 'less'} than this point last period`;
 
+    // Biggest mover on the same day-for-day basis as the rest of the card:
+    // each category's spend so far this period vs its spend by the same day
+    // of the previous period — so all numbers here answer one question.
+    const todayISO = toISODateString(startOfToday);
+    const prevCutoffISO = toISODateString(new Date(previous.start.getTime() + (sameDayIdx + 1) * 86400000));
+    let mover = null;
+    let moverDiff = 0;
+    categories.forEach((c) => {
+      const cur = allTx
+        .filter((t) => t.categoryId === c.id && t.date >= current.startISO && t.date <= todayISO)
+        .reduce((sum, t) => sum + t.amountMinor, 0);
+      const prev = allTx
+        .filter((t) => t.categoryId === c.id && t.date >= previous.startISO && t.date < prevCutoffISO)
+        .reduce((sum, t) => sum + t.amountMinor, 0);
+      const diff = cur - prev;
+      if (Math.abs(diff) > Math.abs(moverDiff)) { moverDiff = diff; mover = c; }
+    });
+
     const ticks = [];
     for (let i = 0; i < days; i += 7) {
       ticks.push({ index: i, label: formatShortDate(toISODateString(new Date(current.start.getTime() + i * 86400000))) });
@@ -205,13 +189,18 @@ export async function mount(root) {
       <div class="card chart-card">
         <div class="summary-row" style="padding:12px 12px 0;">
           <span class="summary-spent">${formatMoney(spentSoFar)}</span>
-          <span class="summary-limit">by ${formatShortDate(toISODateString(startOfToday))}</span>
+          <span class="summary-limit">${current.label}</span>
         </div>
         <p class="summary-caption" style="color:${deltaColor};padding:0 12px;">
           ${delta !== 0 ? icon(up ? 'arrow-up-circle' : 'arrow-down-circle', { size: 14 }) : ''} ${deltaLabel}
         </p>
         ${chart}
         ${chartLegend}
+        ${mover && moverDiff !== 0 ? `
+          <div class="mover-row" style="margin:10px 12px 4px;">
+            <span class="mover-label">Biggest mover</span>
+            <span class="mover-value">${escapeHtml(mover.name)} ${moverDiff > 0 ? '+' : '−'}${formatMoney(Math.abs(moverDiff))}</span>
+          </div>` : ''}
       </div>
     `;
   }
