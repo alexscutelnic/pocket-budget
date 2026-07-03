@@ -164,6 +164,60 @@ export function lineChart(points, { width = 328, height = 130, color = 'var(--gr
   `;
 }
 
+// Two-series cumulative day-by-day pace chart — this period's running spend
+// against the previous period's, on a shared day-of-period x axis. Same
+// measure both times, so a single hue does identity-by-recency (current
+// solid/emphasized, previous dashed + faded — the barChart treatment) rather
+// than a second competing hue. Only the current endpoint is direct-labeled.
+// `current` may be shorter than `days` (it stops at today); `previous` is
+// clipped by the caller to the same day domain.
+export function paceLineChart({ days, ticks, current, previous, color = 'var(--blue)', valueFormatter = String }, { width = 328, height = 150 } = {}) {
+  const padTop = 24;
+  const padBottom = 20;
+  const padX = 8;
+  const chartH = height - padTop - padBottom;
+  const max = niceMax(Math.max(current[current.length - 1] || 0, previous[previous.length - 1] || 0, 0));
+  const stepX = days > 1 ? (width - padX * 2) / (days - 1) : 0;
+  const xAt = (i) => padX + stepX * i;
+  const yAt = (v) => padTop + chartH - (v / max) * chartH;
+  const baseline = padTop + chartH;
+
+  const pathFor = (vals) => vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${xAt(i)},${yAt(v)}`).join(' ');
+
+  const prevLine = previous.length > 1
+    ? `<path d="${pathFor(previous)}" fill="none" stroke="${color}" stroke-width="2" opacity="0.35" stroke-dasharray="4 4" stroke-linecap="round" stroke-linejoin="round"/>`
+    : '';
+  const curLine = current.length > 1
+    ? `<path d="${pathFor(current)}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`
+    : '';
+
+  let endDot = '';
+  let endLabel = '';
+  if (current.length > 0) {
+    const lastX = xAt(current.length - 1);
+    const lastY = yAt(current[current.length - 1]);
+    endDot = `<circle cx="${lastX}" cy="${lastY}" r="5" fill="${color}" stroke="var(--bg-secondary)" stroke-width="2"/>`;
+    endLabel = `<text x="${Math.min(Math.max(lastX, 30), width - 4)}" y="${Math.max(lastY - 12, 12)}" text-anchor="${lastX < 40 ? 'start' : 'end'}" font-size="12" font-weight="600" fill="var(--label-primary)">${valueFormatter(current[current.length - 1])}</text>`;
+  }
+
+  const tickEls = ticks.map((t) => {
+    const x = xAt(t.index);
+    const anchor = x < 20 ? 'start' : x > width - 20 ? 'end' : 'middle';
+    return `<text x="${x}" y="${height - 4}" text-anchor="${anchor}" font-size="10" fill="var(--label-secondary)">${escapeXml(t.label)}</text>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative spend by day, this period vs last period">
+      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="var(--separator)" stroke-width="1"/>
+      ${prevLine}
+      ${curLine}
+      ${endDot}
+      ${endLabel}
+      ${tickEls}
+    </svg>
+  `;
+}
+
 // Pass an `id` per item to make it tappable — the caller handles
 // `data-action="select-legend-item"` / `data-id` via its own delegation.
 export function legend(items) {

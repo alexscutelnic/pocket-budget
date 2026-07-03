@@ -1,9 +1,9 @@
 import { getSettings, listCategories, listTransactions, listPotEntries } from '../db.js';
-import { getRecentPeriods } from '../period.js';
-import { formatMoney, escapeHtml } from '../format.js';
+import { getRecentPeriods, toISODateString } from '../period.js';
+import { formatMoney, formatShortDate, escapeHtml } from '../format.js';
 import { icon } from '../icons.js';
 import { paletteColor, labelInkForIndex } from '../palette.js';
-import { barChart, stackedBarChart, lineChart, legend } from '../charts.js';
+import { barChart, stackedBarChart, lineChart, paceLineChart, legend } from '../charts.js';
 
 const MONTH_SHORT = new Intl.DateTimeFormat('en-GB', { month: 'short' });
 const DEFAULT_PERIOD_COUNT = 6;
@@ -89,6 +89,7 @@ export async function mount(root) {
 
     return `
       ${allTx.length > 0 ? renderComparisonCard(thisPeriod, lastPeriod) : ''}
+      ${renderPeriodPaceCard()}
       ${renderSpendPerPeriodCard(periodStats)}
       ${renderSpendByCategoryCard(periodStats)}
       ${renderSavingsCard()}
@@ -130,6 +131,87 @@ export async function mount(root) {
             <span class="mover-label">Biggest mover</span>
             <span class="mover-value">${escapeHtml(mover.name)} ${moverDiff > 0 ? '+' : '−'}${formatMoney(Math.abs(moverDiff))}</span>
           </div>` : ''}
+      </div>
+    `;
+  }
+
+  // Cumulative spend by day, this period vs the same day-of-period last
+  // period — "am I spending faster or slower than last month?".
+  function renderPeriodPaceCard() {
+    const current = chronological[chronological.length - 1];
+    const previous = chronological[chronological.length - 2];
+    const days = Math.round((current.end - current.start) / 86400000);
+
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayIdx = Math.min(Math.max(Math.round((startOfToday - current.start) / 86400000), 0), days - 1);
+
+    function cumulativeByDay(period, numDays) {
+      const perDay = new Array(numDays).fill(0);
+      for (const t of allTx) {
+        if (t.date < period.startISO || t.date >= period.endISO) continue;
+        const [y, m, d] = t.date.split('-').map(Number);
+        const idx = Math.round((new Date(y, m - 1, d) - period.start) / 86400000);
+        if (idx >= 0 && idx < numDays) perDay[idx] += t.amountMinor;
+      }
+      let running = 0;
+      return perDay.map((v) => (running += v));
+    }
+
+    const currentCum = cumulativeByDay(current, days).slice(0, todayIdx + 1);
+    const prevDays = Math.round((previous.end - previous.start) / 86400000);
+    // Clip the previous period to the current period's day domain — the
+    // comparison is day-for-day, and its full total already has its own card.
+    const prevCum = cumulativeByDay(previous, prevDays).slice(0, days);
+
+    const spentSoFar = currentCum[currentCum.length - 1] || 0;
+    const prevHasData = (prevCum[prevCum.length - 1] || 0) > 0;
+
+    if (spentSoFar === 0 && !prevHasData) {
+      return `<div class="card-header">This period, day by day</div><div class="card">${chartEmptyNote('No spending recorded yet.')}</div>`;
+    }
+
+    const sameDayIdx = Math.min(todayIdx, prevCum.length - 1);
+    const sameDayLast = prevCum[sameDayIdx] || 0;
+    const delta = spentSoFar - sameDayLast;
+    const up = delta > 0;
+    const deltaColor = delta === 0 ? 'var(--label-secondary)' : (up ? 'var(--red)' : 'var(--green)');
+    const deltaLabel = delta === 0
+      ? 'Level with this point last period'
+      : `${formatMoney(Math.abs(delta))} ${up ? 'more' : 'less'} than this point last period`;
+
+    const ticks = [];
+    for (let i = 0; i < days; i += 7) {
+      ticks.push({ index: i, label: formatShortDate(toISODateString(new Date(current.start.getTime() + i * 86400000))) });
+    }
+
+    const chart = paceLineChart({
+      days,
+      ticks,
+      current: currentCum,
+      previous: prevHasData ? prevCum : [],
+      valueFormatter: compactMoney,
+    });
+
+    const chartLegend = prevHasData
+      ? legend([
+          { label: 'This period', color: 'var(--blue)' },
+          { label: 'Last period', color: 'color-mix(in srgb, var(--blue) 35%, transparent)' },
+        ])
+      : '';
+
+    return `
+      <div class="card-header">This period, day by day</div>
+      <div class="card chart-card">
+        <div class="summary-row" style="padding:12px 12px 0;">
+          <span class="summary-spent">${formatMoney(spentSoFar)}</span>
+          <span class="summary-limit">by ${formatShortDate(toISODateString(startOfToday))}</span>
+        </div>
+        <p class="summary-caption" style="color:${deltaColor};padding:0 12px;">
+          ${delta !== 0 ? icon(up ? 'arrow-up-circle' : 'arrow-down-circle', { size: 14 }) : ''} ${deltaLabel}
+        </p>
+        ${chart}
+        ${chartLegend}
       </div>
     `;
   }
