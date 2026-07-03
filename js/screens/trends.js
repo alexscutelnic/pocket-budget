@@ -169,11 +169,19 @@ export async function mount(root) {
       ticks.push({ index: i, label: formatShortDate(toISODateString(new Date(current.start.getTime() + i * 86400000))) });
     }
 
+    // Linear run-rate projection to period end. Held back until day 3 — one
+    // big shop on day 1 would otherwise "project" a terrifying month.
+    const elapsedDays = todayIdx + 1;
+    const projectedTotal = elapsedDays >= 3 && elapsedDays < days && spentSoFar > 0
+      ? Math.round((spentSoFar / elapsedDays) * days)
+      : null;
+
     const chart = paceLineChart({
       days,
       ticks,
       current: currentCum,
       previous: prevHasData ? prevCum : [],
+      projectedTotal,
       valueFormatter: compactMoney,
     });
 
@@ -194,6 +202,7 @@ export async function mount(root) {
         <p class="summary-caption" style="color:${deltaColor};padding:0 12px;">
           ${delta !== 0 ? icon(up ? 'arrow-up-circle' : 'arrow-down-circle', { size: 14 }) : ''} ${deltaLabel}
         </p>
+        ${projectedTotal != null ? `<p class="summary-caption" style="padding:0 12px;">On track for ~${formatMoney(projectedTotal)} this period</p>` : ''}
         ${chart}
         ${chartLegend}
         ${mover && moverDiff !== 0 ? `

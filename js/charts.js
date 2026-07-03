@@ -171,12 +171,12 @@ export function lineChart(points, { width = 328, height = 140, color = 'var(--gr
 // than a second competing hue. Only the current endpoint is direct-labeled.
 // `current` may be shorter than `days` (it stops at today); `previous` is
 // clipped by the caller to the same day domain.
-export function paceLineChart({ days, ticks, current, previous, color = 'var(--blue)', valueFormatter = String }, { width = 328, height = 150 } = {}) {
+export function paceLineChart({ days, ticks, current, previous, projectedTotal = null, color = 'var(--blue)', valueFormatter = String }, { width = 328, height = 150 } = {}) {
   const padTop = 24;
   const padBottom = 20;
   const padX = 8;
   const chartH = height - padTop - padBottom;
-  const max = niceMax(Math.max(current[current.length - 1] || 0, previous[previous.length - 1] || 0, 0));
+  const max = niceMax(Math.max(current[current.length - 1] || 0, previous[previous.length - 1] || 0, projectedTotal || 0, 0));
   const stepX = days > 1 ? (width - padX * 2) / (days - 1) : 0;
   const xAt = (i) => padX + stepX * i;
   const yAt = (v) => padTop + chartH - (v / max) * chartH;
@@ -200,6 +200,21 @@ export function paceLineChart({ days, ticks, current, previous, color = 'var(--b
     endLabel = `<text x="${Math.min(Math.max(lastX, 30), width - 4)}" y="${Math.max(lastY - 12, 12)}" text-anchor="${lastX < 40 ? 'start' : 'end'}" font-size="12" font-weight="600" fill="var(--label-primary)">${valueFormatter(current[current.length - 1])}</text>`;
   }
 
+  // Dotted straight run from today's point to the projected period-end total.
+  // Distinct dash rhythm (2 2) from the previous-period line (4 4) so the two
+  // dashed lines read as different things at a glance.
+  let projection = '';
+  if (projectedTotal != null && current.length > 1 && current.length < days) {
+    const fromX = xAt(current.length - 1);
+    const fromY = yAt(current[current.length - 1]);
+    const toX = xAt(days - 1);
+    const toY = yAt(projectedTotal);
+    projection = `
+      <path d="M${fromX},${fromY} L${toX},${toY}" fill="none" stroke="${color}" stroke-width="2" opacity="0.55" stroke-dasharray="2 2" stroke-linecap="round"/>
+      <circle cx="${toX}" cy="${toY}" r="3.5" fill="var(--bg-secondary)" stroke="${color}" stroke-width="2" opacity="0.7"/>
+      <text x="${width - 4}" y="${Math.max(toY - 10, 12)}" text-anchor="end" font-size="11" fill="var(--label-secondary)">~${valueFormatter(projectedTotal)}</text>`;
+  }
+
   const tickEls = ticks.map((t) => {
     const x = xAt(t.index);
     const anchor = x < 20 ? 'start' : x > width - 20 ? 'end' : 'middle';
@@ -210,6 +225,7 @@ export function paceLineChart({ days, ticks, current, previous, color = 'var(--b
     <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative spend by day, this period vs last period">
       <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="var(--separator)" stroke-width="1"/>
       ${prevLine}
+      ${projection}
       ${curLine}
       ${endDot}
       ${endLabel}

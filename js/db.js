@@ -125,6 +125,7 @@ export async function initDB() {
       schemaVersion: 1,
       lastExportAt: null,
       exportBannerDismissedAt: null,
+      lastRecapPeriodKey: null,
       createdAt: now(),
       updatedAt: now(),
     });

@@ -12,7 +12,7 @@ import {
   addIncomeEntry,
   softDeleteIncomeEntry,
 } from '../db.js';
-import { getPeriodForDate, todayISODateString } from '../period.js';
+import { getPeriodForDate, getRecentPeriods, todayISODateString, toISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, formatShortDate, currencySymbol, escapeHtml } from '../format.js';
 import { icon, CATEGORY_ICON_KEYS } from '../icons.js';
 import { paletteColor, PALETTE, labelInkForIndex } from '../palette.js';
@@ -32,8 +32,11 @@ export async function mount(root) {
   let incomeEntries = await listIncomeEntries({ from: period.startISO, to: period.endISO });
 
   const view = { screen: 'list', categoryId: null };
-  // sheet.type: 'tx' | 'income-entry' | 'category-appearance'
+  // sheet.type: 'tx' | 'income-entry' | 'category-appearance' | 'recap'
   let sheet = null;
+  let recap = await buildRecapIfDue();
+  if (recap) sheet = { type: 'recap' };
+  let favourites = await computeFavourites();
 
   async function reloadData() {
     settings = await getSettings();
@@ -42,6 +45,27 @@ export async function mount(root) {
     transactions = await listTransactions({ from: period.startISO, to: period.endISO });
     potEntries = await listPotEntries();
     incomeEntries = await listIncomeEntries({ from: period.startISO, to: period.endISO });
+    favourites = await computeFavourites();
+  }
+
+  // Purchases you've logged identically (category + amount + note) at least
+  // twice in the last 90 days — offered as one-tap prefills in the add sheet.
+  async function computeFavourites() {
+    const from = toISODateString(new Date(Date.now() - 90 * 86400000));
+    const recent = await listTransactions({ from });
+    const groups = new Map();
+    for (const t of recent) {
+      const note = (t.note || '').trim();
+      const key = `${t.categoryId}|${t.amountMinor}|${note.toLowerCase()}`;
+      const g = groups.get(key) || { categoryId: t.categoryId, amountMinor: t.amountMinor, note, count: 0, lastDate: '' };
+      g.count += 1;
+      if (t.date > g.lastDate) g.lastDate = t.date;
+      groups.set(key, g);
+    }
+    return [...groups.values()]
+      .filter((g) => g.count >= 2 && categories.some((c) => c.id === g.categoryId))
+      .sort((a, b) => b.count - a.count || b.lastDate.localeCompare(a.lastDate))
+      .slice(0, 3);
   }
 
   function categorySpend(categoryId) {
@@ -75,6 +99,100 @@ export async function mount(root) {
     return true;
   }
 
+  // ---- Period recap ---------------------------------------------------
+  // Shown once, the first time the app opens in a new period, summarizing
+  // the period that just ended. Dismissing it records lastRecapPeriodKey.
+
+  async function buildRecapIfDue() {
+    if (settings.lastRecapPeriodKey === period.startISO) return null;
+    const [, prev, prevPrev] = getRecentPeriods(settings.resetDay, 3);
+    const prevTx = await listTransactions({ from: prev.startISO, to: prev.endISO });
+    const prevIncomeEntries = await listIncomeEntries({ from: prev.startISO, to: prev.endISO });
+    const prevPotEntries = potEntries.filter((e) => e.date >= prev.startISO && e.date < prev.endISO);
+
+    if (prevTx.length === 0 && prevIncomeEntries.length === 0 && prevPotEntries.length === 0) {
+      // Nothing to recap (fresh install or an empty period) — mark this
+      // period as seen so we don't re-run the check on every Home mount.
+      await updateSettings({ lastRecapPeriodKey: period.startISO });
+      settings = await getSettings();
+      return null;
+    }
+
+    const spent = prevTx.reduce((sum, t) => sum + t.amountMinor, 0);
+    const extraIncome = prevIncomeEntries.reduce((sum, e) => sum + e.amountMinor, 0);
+    const income = settings.incomeMinor + extraIncome;
+    const saved = prevPotEntries.reduce((sum, e) => sum + e.amountMinor, 0);
+
+    // Historical names/colors matter here, so include archived categories.
+    const allCategories = await listCategories({ includeArchived: true });
+    const spendFor = (txs, categoryId) => txs
+      .filter((t) => t.categoryId === categoryId)
+      .reduce((sum, t) => sum + t.amountMinor, 0);
+
+    let top = null;
+    let topAmount = 0;
+    allCategories.forEach((c) => {
+      const amount = spendFor(prevTx, c.id);
+      if (amount > topAmount) { topAmount = amount; top = c; }
+    });
+
+    const prevPrevTx = await listTransactions({ from: prevPrev.startISO, to: prevPrev.endISO });
+    let mover = null;
+    let moverDiff = 0;
+    if (prevPrevTx.length > 0) {
+      allCategories.forEach((c) => {
+        const diff = spendFor(prevTx, c.id) - spendFor(prevPrevTx, c.id);
+        if (Math.abs(diff) > Math.abs(moverDiff)) { moverDiff = diff; mover = c; }
+      });
+    }
+
+    const monthName = new Intl.DateTimeFormat('en-GB', { month: 'long' })
+      .format(new Date(prev.end.getTime() - 86400000));
+
+    return { monthName, label: prev.label, spent, income, saved, top, topAmount, mover, moverDiff };
+  }
+
+  function renderRecapSheet() {
+    const r = recap;
+    const leftOver = r.income - r.spent - r.saved;
+    const savingsRate = r.income > 0 && r.saved > 0 ? Math.round((r.saved / r.income) * 100) : null;
+
+    const rows = [];
+    if (r.income > 0) rows.push(['Income', `+${formatMoney(r.income)}`, 'var(--green)']);
+    rows.push(['Spent', formatMoney(r.spent), '']);
+    if (r.saved > 0) rows.push(['Saved to pots', formatMoney(r.saved), 'var(--green)']);
+    else if (r.saved < 0) rows.push(['Taken from pots', formatMoney(-r.saved), '']);
+    if (r.income > 0) rows.push(['Left over', formatMoney(leftOver), leftOver < 0 ? 'var(--red)' : '']);
+
+    const rowsHtml = rows.map(([label, value, color]) => `
+      <div class="recap-row">
+        <span class="recap-label">${label}</span>
+        <span class="recap-value" style="${color ? `color:${color}` : ''}">${value}</span>
+      </div>`).join('');
+
+    const highlights = [];
+    if (savingsRate != null) highlights.push(`You saved ${savingsRate}% of your income.`);
+    if (r.top) highlights.push(`Most went on ${escapeHtml(r.top.name)} (${formatMoney(r.topAmount)}).`);
+    if (r.mover && r.moverDiff !== 0) {
+      highlights.push(`${escapeHtml(r.mover.name)} moved most vs the period before: ${r.moverDiff > 0 ? '+' : '−'}${formatMoney(Math.abs(r.moverDiff))}.`);
+    }
+
+    return `
+      <div class="sheet-backdrop">
+        <div class="sheet">
+          <div class="sheet-header">
+            <h2>Your ${r.monthName} recap</h2>
+            <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
+          </div>
+          <p class="field-label" style="margin:-6px 0 12px;">${r.label}</p>
+          <div class="card" style="margin:0 0 14px;">${rowsHtml}</div>
+          ${highlights.length ? `<div class="recap-highlights">${highlights.map((h) => `<p>${h}</p>`).join('')}</div>` : ''}
+          <button class="save-btn" data-action="close-sheet">Done</button>
+        </div>
+      </div>
+    `;
+  }
+
   function render() {
     root.innerHTML = view.screen === 'category' ? renderCategoryDetail()
       : view.screen === 'income' ? renderIncomeDetail()
@@ -92,6 +210,7 @@ export async function mount(root) {
   function renderActiveSheet() {
     if (sheet.type === 'income-entry') return renderIncomeEntrySheet();
     if (sheet.type === 'category-appearance') return renderAppearanceSheet();
+    if (sheet.type === 'recap') return renderRecapSheet();
     return renderTxSheet();
   }
 
@@ -157,6 +276,18 @@ export async function mount(root) {
     if (netPotChange > 0) breakdown.push(`Saved ${formatMoney(netPotChange)}`);
     else if (netPotChange < 0) breakdown.push(`Withdrew ${formatMoney(-netPotChange)}`);
 
+    // daysRemaining includes today, so this is "what can I spend per day,
+    // starting now, without going over".
+    const safePerDay = remaining > 0 && period.daysRemaining > 0
+      ? Math.floor(remaining / period.daysRemaining)
+      : null;
+    const safeRow = safePerDay != null
+      ? `<div class="safe-to-spend">
+          <span class="safe-label">Safe to spend</span>
+          <span class="safe-value">${formatMoney(safePerDay)} / day</span>
+        </div>`
+      : '';
+
     return `
       <div class="card summary-card">
         <div class="summary-row">
@@ -168,6 +299,7 @@ export async function mount(root) {
           <div class="progress-fill ${progressClass(spentRatio)}" style="width:${Math.min(Math.max(spentRatio, 0), 1) * 100}%"></div>
         </div>
         <p class="summary-breakdown">${breakdown.join(' · ')}</p>
+        ${safeRow}
       </div>
     `;
   }
@@ -322,8 +454,14 @@ export async function mount(root) {
     render();
   }
 
-  function closeSheet() {
+  async function closeSheet() {
+    const wasRecap = sheet?.type === 'recap';
     sheet = null;
+    if (wasRecap) {
+      recap = null;
+      await updateSettings({ lastRecapPeriodKey: period.startISO });
+      settings = await getSettings();
+    }
     render();
   }
 
@@ -336,6 +474,17 @@ export async function mount(root) {
 
     const amountValue = sheet.defaults.amountMinor != null ? (sheet.defaults.amountMinor / 100).toFixed(2) : '';
 
+    const favChips = sheet.mode === 'add' && favourites.length ? `
+      <div class="fav-row">
+        ${favourites.map((f, i) => {
+          const cat = categories.find((c) => c.id === f.categoryId);
+          return `<button class="fav-chip" data-action="apply-favourite" data-fav-index="${i}">
+            <span class="fav-dot" style="background:${paletteColor(cat.colorIndex)}"></span>
+            <span>${escapeHtml(f.note || cat.name)} · ${formatMoney(f.amountMinor)}</span>
+          </button>`;
+        }).join('')}
+      </div>` : '';
+
     return `
       <div class="sheet-backdrop">
         <div class="sheet">
@@ -344,6 +493,7 @@ export async function mount(root) {
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
 
+          ${favChips}
           <input id="tx-amount" class="amount-input" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${amountValue}" />
 
           <div class="field-group">
@@ -560,6 +710,15 @@ export async function mount(root) {
         chip.classList.toggle('selected', chip.dataset.categoryId === sheet.categoryId);
       });
       updateSaveState();
+      return;
+    }
+    if (action === 'apply-favourite') {
+      const f = favourites[Number(actionEl.dataset.favIndex)];
+      if (f) {
+        sheet.categoryId = f.categoryId;
+        sheet.defaults = { ...sheet.defaults, amountMinor: f.amountMinor, note: f.note };
+        render();
+      }
       return;
     }
     if (action === 'edit-tx') return openEditSheet(actionEl.dataset.txId);

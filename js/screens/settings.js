@@ -110,7 +110,7 @@ export async function mount(root) {
       <div class="card">
         <div class="list-row">
           <div style="flex:1;">Pocket Budget</div>
-          <div style="color:var(--label-secondary);">v1.0</div>
+          <div style="color:var(--label-secondary);">v1.1</div>
         </div>
       </div>
     `;
@@ -147,9 +147,19 @@ export async function mount(root) {
           <div>${escapeHtml(s.name)}</div>
           <div style="font-size:13px;color:var(--label-secondary);">${formatMoney(s.amountMinor)} on the ${ordinal(s.dayOfMonth)} · ${cat ? escapeHtml(cat.name) : 'Uncategorized'}</div>
         </div>
+        <div style="font-size:13px;color:var(--label-secondary);flex-shrink:0;">${formatMoney(s.amountMinor * 12)}/yr</div>
         <span class="chevron">${icon('chevron', { size: 16 })}</span>
       </div>`;
     }).join('');
+
+    // The yearly total is the educational number — £15/mo reads as noise,
+    // £180/yr reads as a decision.
+    const monthlyTotal = subscriptions.reduce((sum, s) => sum + s.amountMinor, 0);
+    const totalRow = subscriptions.length > 0 ? `
+      <div class="list-row">
+        <div style="flex:1;font-weight:600;">Total</div>
+        <div style="font-weight:600;">${formatMoney(monthlyTotal)}/mo · ${formatMoney(monthlyTotal * 12)}/yr</div>
+      </div>` : '';
 
     const addRow = `
       <div class="list-row tappable" data-action="add-subscription">
@@ -157,7 +167,7 @@ export async function mount(root) {
         <div style="color:var(--blue);font-weight:500;">Add Subscription</div>
       </div>`;
 
-    return rows + addRow;
+    return rows + totalRow + addRow;
   }
 
   // ---- Currency sheet -----------------------------------------------------
