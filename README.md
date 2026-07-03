@@ -9,6 +9,59 @@ Each install is fully independent: everything is stored locally on-device in
 IndexedDB. There's no backend, no account, and no server — data never leaves
 the phone except via an explicit export.
 
+## What it does
+
+The app is built around one idea: **see your money in and out, per pay
+cycle**. You set a reset day (the day you get paid) and everything — budgets,
+totals, trends — runs payday to payday instead of calendar months.
+
+### Home — what's left right now
+
+- One big number: **what's left to spend this period**, worked out as
+  income + extra income − spending − money moved into savings pots.
+- A **"Safe to spend" figure**: what you can spend per day from today to
+  payday without going over.
+- Your categories (Groceries, Eating Out, …) each with a spending limit and
+  a progress bar that goes green → orange → red as you approach it.
+- The **+** button logs a purchase in a few taps: amount, category, optional
+  note, date. Purchases you log often (same amount, category and note — your
+  usual coffee, say) appear as **one-tap favourite chips** that prefill the
+  whole form.
+- One-off money in (sold something, got a refund) goes under **Extra
+  Income** and counts toward the period.
+
+### Pots — named savings goals
+
+Create pots ("Holiday", "Emergency fund"), give them a target, and move
+money in or out. Money added to a pot counts as spoken-for on Home, so
+saving happens first rather than from whatever's left.
+
+### Trends — where it's all going
+
+- **This period, day by day** — your running spend against the same days
+  last period, plus a dotted projection: *"On track for ~£1,380 this
+  period"*.
+- **Spend per period** and **spend by category** across the last 3, 6 or 12
+  cycles. Tap a category to see it broken down by note — handy for spotting
+  what "Eating Out" actually was.
+- **Total savings** across all pots over time.
+- At the start of each new period you get a one-time **recap** of the one
+  that just ended: income, spent, saved, what was left over, your savings
+  rate, and which category moved most.
+
+### Subscriptions — the money that leaves on its own
+
+Add recurring payments (rent, streaming, gym) once in Settings and they're
+charged to their category automatically each cycle when you open the app.
+Settings also shows each one's **yearly** cost and the total — £15/mo reads
+as noise, £180/yr reads as a decision.
+
+### Settings
+
+Income, reset day, currency, category management (rename, re-icon, recolor,
+reorder, archive), subscriptions, and full JSON export/import for backups.
+If you haven't backed up in over 30 days, Home shows a gentle nudge.
+
 ## Tech
 
 Vanilla JS (ES modules), no framework, no build step. Charts are hand-rolled
@@ -59,7 +112,8 @@ Safari itself.
 ## Backing up your data
 
 Settings → **Export Data** downloads a single dated JSON file with
-everything (settings, categories, transactions, pots, pot entries). Settings
+everything (settings, categories, transactions, pots, pot entries, extra
+income, subscriptions). Settings
 → **Import Data** restores from that file — it fully overwrites whatever's
 currently on the device, so use it to move data to a new phone or recover
 from a backup, not to merge.
@@ -73,7 +127,7 @@ sw.js                 Service worker (cache-first app shell, offline support)
 css/styles.css        iOS-style design system, light + dark mode
 js/
   app.js               Tab router, boot sequence
-  db.js                IndexedDB data layer (settings/categories/transactions/pots/potEntries)
+  db.js                IndexedDB data layer (settings/categories/transactions/pots/potEntries/incomeEntries/subscriptions)
   period.js            Pay-cycle (reset-day to reset-day) math
   format.js             Money formatting, date formatting, small utils
   icons.js              Hand-rolled SF-Symbol-style SVG icon set
