@@ -5,13 +5,18 @@ import {
   addCategory,
   updateCategory,
   archiveCategory,
+  listSubscriptions,
+  addSubscription,
+  updateSubscription,
+  archiveSubscription,
+  runDueSubscriptions,
   exportAll,
   importAll,
 } from '../db.js';
 import { todayISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, currencySymbol, setCurrency, escapeHtml } from '../format.js';
 import { icon, CATEGORY_ICON_KEYS } from '../icons.js';
-import { paletteColor } from '../palette.js';
+import { paletteColor, labelInkForIndex, nextColorIndex, PALETTE } from '../palette.js';
 
 const CURRENCIES = [
   { code: 'GBP', name: 'British Pound' },
@@ -35,19 +40,21 @@ function ordinal(n) {
 export async function mount(root) {
   let settings = await getSettings();
   let categories = await listCategories();
+  let subscriptions = await listSubscriptions();
 
-  let sheet = null; // { type: 'income' | 'reset-day' | 'category', ... }
+  let sheet = null; // { type: 'income' | 'reset-day' | 'category' | 'currency' | 'subscription', ... }
 
   async function reloadData() {
     settings = await getSettings();
     categories = await listCategories();
+    subscriptions = await listSubscriptions();
   }
 
   function render() {
     root.innerHTML = renderScreen();
     if (sheet) {
       root.insertAdjacentHTML('beforeend', renderSheet());
-      const firstInput = root.querySelector('#income-amount, #reset-day-input, #cat-name');
+      const firstInput = root.querySelector('#income-amount, #reset-day-input, #cat-name, #sub-name');
       if (firstInput) firstInput.focus();
       updateSaveState();
     }
@@ -80,6 +87,10 @@ export async function mount(root) {
 
       <div class="card-header">Categories</div>
       <div class="card">${renderCategoryRows()}</div>
+
+      <div class="card-header">Subscriptions</div>
+      <div class="card">${renderSubscriptionRows()}</div>
+      <p class="field-label" style="padding:0 16px;">Charged automatically to their category each time you open the app on or after the billing day.</p>
 
       <div class="card-header">Data</div>
       <div class="card">
@@ -121,6 +132,29 @@ export async function mount(root) {
       <div class="list-row tappable" data-action="add-category">
         <div class="icon-bubble" style="background:var(--fill-quaternary);color:var(--blue);">${icon('plus')}</div>
         <div style="color:var(--blue);font-weight:500;">Add Category</div>
+      </div>`;
+
+    return rows + addRow;
+  }
+
+  function renderSubscriptionRows() {
+    const rows = subscriptions.map((s) => {
+      const cat = categories.find((c) => c.id === s.categoryId);
+      return `
+      <div class="list-row tappable" data-action="edit-subscription" data-subscription-id="${s.id}">
+        <div class="icon-bubble" style="background:${cat ? paletteColor(cat.colorIndex) : 'var(--fill-quaternary)'}">${icon(cat ? cat.icon : 'doc-text')}</div>
+        <div style="flex:1;min-width:0;">
+          <div>${escapeHtml(s.name)}</div>
+          <div style="font-size:13px;color:var(--label-secondary);">${formatMoney(s.amountMinor)} on the ${ordinal(s.dayOfMonth)} · ${cat ? escapeHtml(cat.name) : 'Uncategorized'}</div>
+        </div>
+        <span class="chevron">${icon('chevron', { size: 16 })}</span>
+      </div>`;
+    }).join('');
+
+    const addRow = `
+      <div class="list-row tappable" data-action="add-subscription">
+        <div class="icon-bubble" style="background:var(--fill-quaternary);color:var(--blue);">${icon('plus')}</div>
+        <div style="color:var(--blue);font-weight:500;">Add Subscription</div>
       </div>`;
 
     return rows + addRow;
@@ -234,9 +268,13 @@ export async function mount(root) {
     if (mode === 'edit') {
       const c = categories.find((cat) => cat.id === categoryId);
       if (!c) return;
-      sheet = { type: 'category', mode, categoryId: c.id, icon: c.icon, defaults: { name: c.name, limitMinor: c.limitMinor } };
+      sheet = { type: 'category', mode, categoryId: c.id, icon: c.icon, colorIndex: c.colorIndex, defaults: { name: c.name, limitMinor: c.limitMinor } };
     } else {
-      sheet = { type: 'category', mode: 'create', icon: CATEGORY_ICON_KEYS[0], defaults: { name: '', limitMinor: null } };
+      sheet = {
+        type: 'category', mode: 'create', icon: CATEGORY_ICON_KEYS[0],
+        colorIndex: nextColorIndex(categories.map((c) => c.colorIndex)),
+        defaults: { name: '', limitMinor: null },
+      };
     }
     render();
   }
@@ -244,8 +282,11 @@ export async function mount(root) {
   function renderCategorySheet() {
     const icons = CATEGORY_ICON_KEYS.map((key) => `
       <div class="category-chip ${key === sheet.icon ? 'selected' : ''}" data-action="select-category-icon" data-icon-key="${key}">
-        <div class="icon-bubble" style="background:${sheet.icon === key ? 'var(--blue)' : 'var(--fill-quaternary)'};color:${sheet.icon === key ? '#fff' : 'var(--label-secondary)'}">${icon(key)}</div>
+        <div class="icon-bubble" style="background:${sheet.icon === key ? paletteColor(sheet.colorIndex) : 'var(--fill-quaternary)'};color:${sheet.icon === key ? '#fff' : 'var(--label-secondary)'}">${icon(key)}</div>
       </div>`).join('');
+
+    const swatches = PALETTE.map((_, i) => `
+      <button class="color-swatch" data-action="select-category-color" data-color-index="${i}" style="background:${paletteColor(i)};color:${labelInkForIndex(i)}" aria-label="Color ${i + 1}">${i === sheet.colorIndex ? icon('checkmark', { size: 16 }) : ''}</button>`).join('');
 
     const limitValue = sheet.defaults.limitMinor != null ? (sheet.defaults.limitMinor / 100).toFixed(2) : '';
 
@@ -267,6 +308,11 @@ export async function mount(root) {
             <p class="field-label">Icon</p>
           </div>
           <div class="category-picker">${icons}</div>
+
+          <div class="field-group" style="margin-top:12px;">
+            <p class="field-label">Color</p>
+          </div>
+          <div class="color-picker">${swatches}</div>
 
           <div class="field-group" style="margin-top:12px;">
             <p class="field-label">Limit per period</p>
@@ -292,7 +338,7 @@ export async function mount(root) {
     const limitMinor = parseAmountToMinor(root.querySelector('#cat-limit').value);
     if (!name || limitMinor == null || limitMinor <= 0 || isDuplicateName(name)) return;
 
-    const payload = { name, icon: sheet.icon, limitMinor };
+    const payload = { name, icon: sheet.icon, colorIndex: sheet.colorIndex, limitMinor };
     if (sheet.mode === 'edit') {
       await updateCategory(sheet.categoryId, payload);
     } else {
@@ -319,6 +365,99 @@ export async function mount(root) {
     const b = categories[swapIdx];
     await updateCategory(a.id, { sortOrder: b.sortOrder });
     await updateCategory(b.id, { sortOrder: a.sortOrder });
+    await reloadData();
+    render();
+  }
+
+  // ---- Subscription sheet --------------------------------------------------
+
+  function openSubscriptionSheet(mode, subscriptionId) {
+    if (mode === 'edit') {
+      const s = subscriptions.find((sub) => sub.id === subscriptionId);
+      if (!s) return;
+      sheet = {
+        type: 'subscription', mode, subscriptionId: s.id, categoryId: s.categoryId,
+        defaults: { name: s.name, amountMinor: s.amountMinor, dayOfMonth: s.dayOfMonth },
+      };
+    } else {
+      sheet = {
+        type: 'subscription', mode: 'create', categoryId: categories[0]?.id ?? null,
+        defaults: { name: '', amountMinor: null, dayOfMonth: 1 },
+      };
+    }
+    render();
+  }
+
+  function renderSubscriptionSheet() {
+    const chips = categories.map((c) => `
+      <div class="category-chip ${c.id === sheet.categoryId ? 'selected' : ''}" data-action="select-subscription-category" data-category-id="${c.id}">
+        <div class="icon-bubble" style="background:${paletteColor(c.colorIndex)}">${icon(c.icon)}</div>
+        <div class="chip-label">${escapeHtml(c.name)}</div>
+      </div>`).join('');
+
+    const amountValue = sheet.defaults.amountMinor != null ? (sheet.defaults.amountMinor / 100).toFixed(2) : '';
+
+    return `
+      <div class="sheet-backdrop">
+        <div class="sheet">
+          <div class="sheet-header">
+            <h2>${sheet.mode === 'edit' ? 'Edit Subscription' : 'New Subscription'}</h2>
+            <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
+          </div>
+
+          <div class="field-group">
+            <p class="field-label">Name</p>
+            <input id="sub-name" type="text" placeholder="e.g. Gym" value="${escapeHtml(sheet.defaults.name)}" />
+          </div>
+
+          <div class="field-group">
+            <p class="field-label">Category</p>
+          </div>
+          <div class="category-picker">${chips}</div>
+
+          <div class="field-group" style="margin-top:12px;">
+            <p class="field-label">Amount per month</p>
+            <input id="sub-amount" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${amountValue}" />
+          </div>
+
+          <div class="field-group">
+            <p class="field-label">Billing day (1–31)</p>
+            <input id="sub-day" type="text" inputmode="numeric" value="${sheet.defaults.dayOfMonth}" />
+          </div>
+
+          <button id="sub-save" class="save-btn" data-action="save-subscription">Save</button>
+          ${sheet.mode === 'edit' ? `<div class="row-actions" style="margin-top:10px;"><button class="destructive" data-action="archive-subscription-in-sheet">${icon('trash')} Archive Subscription</button></div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  async function saveSubscriptionSheet() {
+    const name = root.querySelector('#sub-name').value.trim();
+    const amountMinor = parseAmountToMinor(root.querySelector('#sub-amount').value);
+    const dayOfMonth = parseInt(root.querySelector('#sub-day').value, 10);
+    if (!name || amountMinor == null || amountMinor <= 0 || !sheet.categoryId) return;
+    if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) return;
+
+    const payload = { name, categoryId: sheet.categoryId, amountMinor, dayOfMonth };
+    if (sheet.mode === 'edit') {
+      await updateSubscription(sheet.subscriptionId, payload);
+    } else {
+      await addSubscription(payload);
+    }
+    // Charge right away rather than waiting for the next app launch, so a
+    // subscription whose billing day already passed this cycle shows up
+    // immediately instead of looking like nothing happened.
+    await runDueSubscriptions();
+    sheet = null;
+    await reloadData();
+    render();
+  }
+
+  async function archiveCurrentSubscription() {
+    if (!window.confirm('Archive this subscription? It will stop creating new transactions automatically.')) return;
+    await archiveSubscription(sheet.subscriptionId);
+    sheet = null;
     await reloadData();
     render();
   }
@@ -367,6 +506,7 @@ export async function mount(root) {
     if (sheet.type === 'currency') return renderCurrencySheet();
     if (sheet.type === 'income') return renderIncomeSheet();
     if (sheet.type === 'reset-day') return renderResetDaySheet();
+    if (sheet.type === 'subscription') return renderSubscriptionSheet();
     return renderCategorySheet();
   }
 
@@ -389,6 +529,12 @@ export async function mount(root) {
       if (nameWarningEl) nameWarningEl.textContent = duplicate ? `A category named "${name}" already exists.` : '';
       if (btn) btn.disabled = !name || limit == null || limit <= 0 || duplicate;
       updateLimitWarning(limit);
+    } else if (sheet.type === 'subscription') {
+      const name = root.querySelector('#sub-name')?.value.trim();
+      const amount = parseAmountToMinor(root.querySelector('#sub-amount')?.value);
+      const day = parseInt(root.querySelector('#sub-day')?.value, 10);
+      const btn = root.querySelector('#sub-save');
+      if (btn) btn.disabled = !name || amount == null || amount <= 0 || !sheet.categoryId || !Number.isInteger(day) || day < 1 || day > 31;
     }
   }
 
@@ -440,13 +586,34 @@ export async function mount(root) {
         const selected = chip.dataset.iconKey === sheet.icon;
         chip.classList.toggle('selected', selected);
         const bubble = chip.querySelector('.icon-bubble');
-        bubble.style.background = selected ? 'var(--blue)' : 'var(--fill-quaternary)';
+        bubble.style.background = selected ? paletteColor(sheet.colorIndex) : 'var(--fill-quaternary)';
         bubble.style.color = selected ? '#fff' : 'var(--label-secondary)';
       });
       return;
     }
+    if (action === 'select-category-color') {
+      sheet.colorIndex = Number(actionEl.dataset.colorIndex);
+      root.querySelectorAll('.color-swatch').forEach((sw) => {
+        sw.innerHTML = Number(sw.dataset.colorIndex) === sheet.colorIndex ? icon('checkmark', { size: 16 }) : '';
+      });
+      const selectedBubble = root.querySelector('.category-chip.selected .icon-bubble');
+      if (selectedBubble) selectedBubble.style.background = paletteColor(sheet.colorIndex);
+      return;
+    }
     if (action === 'save-category') return saveCategorySheet();
     if (action === 'archive-category-in-sheet') return archiveCurrentCategory();
+    if (action === 'add-subscription') return openSubscriptionSheet('create');
+    if (action === 'edit-subscription') return openSubscriptionSheet('edit', actionEl.dataset.subscriptionId);
+    if (action === 'select-subscription-category') {
+      sheet.categoryId = actionEl.dataset.categoryId;
+      root.querySelectorAll('.category-chip').forEach((chip) => {
+        chip.classList.toggle('selected', chip.dataset.categoryId === sheet.categoryId);
+      });
+      updateSaveState();
+      return;
+    }
+    if (action === 'save-subscription') return saveSubscriptionSheet();
+    if (action === 'archive-subscription-in-sheet') return archiveCurrentSubscription();
     if (action === 'export-data') return exportData();
     if (action === 'trigger-import') return root.querySelector('#import-file-input').click();
   });
@@ -457,7 +624,7 @@ export async function mount(root) {
 
   root.addEventListener('input', (e) => {
     if (!sheet) return;
-    if (['income-amount', 'reset-day-input', 'cat-name', 'cat-limit'].includes(e.target.id)) updateSaveState();
+    if (['income-amount', 'reset-day-input', 'cat-name', 'cat-limit', 'sub-name', 'sub-amount', 'sub-day'].includes(e.target.id)) updateSaveState();
   });
 
   render();

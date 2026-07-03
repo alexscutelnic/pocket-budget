@@ -3,9 +3,10 @@
 // are soft-deleted via deletedAt so a future sync backend is a bolt-on.
 
 import { nextColorIndex } from './palette.js';
+import { todayISODateString } from './period.js';
 
 const DB_NAME = 'pocket-budget';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const DEFAULT_CATEGORIES = [
   { name: 'Groceries', icon: 'cart', limitMinor: 30000 },
@@ -56,6 +57,14 @@ function openRawDB() {
         const s = db.createObjectStore('potEntries', { keyPath: 'id' });
         s.createIndex('potId', 'potId');
         s.createIndex('date', 'date');
+      }
+      if (!db.objectStoreNames.contains('incomeEntries')) {
+        const s = db.createObjectStore('incomeEntries', { keyPath: 'id' });
+        s.createIndex('date', 'date');
+      }
+      if (!db.objectStoreNames.contains('subscriptions')) {
+        const s = db.createObjectStore('subscriptions', { keyPath: 'id' });
+        s.createIndex('categoryId', 'categoryId');
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -180,7 +189,7 @@ export async function getCategory(id) {
   return getOne('categories', id);
 }
 
-export async function addCategory({ name, icon, limitMinor, sortOrder }) {
+export async function addCategory({ name, icon, limitMinor, sortOrder, colorIndex }) {
   const all = await getAll('categories');
   const record = {
     id: uuid(),
@@ -188,7 +197,7 @@ export async function addCategory({ name, icon, limitMinor, sortOrder }) {
     icon,
     limitMinor,
     sortOrder: sortOrder ?? all.length,
-    colorIndex: nextColorIndex(all.map((c) => c.colorIndex)),
+    colorIndex: colorIndex ?? nextColorIndex(all.map((c) => c.colorIndex)),
     archivedAt: null,
     createdAt: now(),
     updatedAt: now(),
@@ -319,30 +328,145 @@ export async function softDeletePotEntry(id) {
   return updatePotEntry(id, { deletedAt: now() });
 }
 
+// ---- Income entries (one-off extra income within a period) --------------------
+
+export async function listIncomeEntries({ from = null, to = null } = {}) {
+  const all = await getAll('incomeEntries');
+  return all
+    .filter((e) => !e.deletedAt)
+    .filter((e) => !from || e.date >= from)
+    .filter((e) => !to || e.date < to)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt.localeCompare(a.createdAt)));
+}
+
+export async function addIncomeEntry({ amountMinor, note = '', date }) {
+  const record = {
+    id: uuid(),
+    amountMinor,
+    note,
+    date,
+    createdAt: now(),
+    updatedAt: now(),
+    deletedAt: null,
+  };
+  return put('incomeEntries', record);
+}
+
+export async function updateIncomeEntry(id, patch) {
+  const current = await getOne('incomeEntries', id);
+  if (!current) throw new Error('Income entry not found');
+  const updated = { ...current, ...patch, id, updatedAt: now() };
+  return put('incomeEntries', updated);
+}
+
+export async function softDeleteIncomeEntry(id) {
+  return updateIncomeEntry(id, { deletedAt: now() });
+}
+
+// ---- Subscriptions (recurring monthly expenses) --------------------------------
+
+function daysInMonthLocal(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+// Most recent occurrence of `dayOfMonth` that falls on or before `todayISO`,
+// clamped per-month the same way the pay-cycle reset day is (see period.js).
+function latestOccurrenceOnOrBefore(dayOfMonth, todayISO) {
+  const [y, m, d] = todayISO.split('-').map(Number);
+  const monthIndex = m - 1;
+  const clampedThisMonth = Math.min(dayOfMonth, daysInMonthLocal(y, monthIndex));
+  if (clampedThisMonth <= d) {
+    return `${y}-${String(m).padStart(2, '0')}-${String(clampedThisMonth).padStart(2, '0')}`;
+  }
+  let py = y;
+  let pm = monthIndex - 1;
+  if (pm < 0) { pm = 11; py -= 1; }
+  const clampedPrevMonth = Math.min(dayOfMonth, daysInMonthLocal(py, pm));
+  return `${py}-${String(pm + 1).padStart(2, '0')}-${String(clampedPrevMonth).padStart(2, '0')}`;
+}
+
+export async function listSubscriptions({ includeArchived = false } = {}) {
+  const all = await getAll('subscriptions');
+  const filtered = includeArchived ? all : all.filter((s) => !s.archivedAt);
+  return filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function addSubscription({ name, categoryId, amountMinor, dayOfMonth }) {
+  const record = {
+    id: uuid(),
+    name,
+    categoryId,
+    amountMinor,
+    dayOfMonth,
+    lastChargedDate: null,
+    archivedAt: null,
+    createdAt: now(),
+    updatedAt: now(),
+  };
+  return put('subscriptions', record);
+}
+
+export async function updateSubscription(id, patch) {
+  const current = await getOne('subscriptions', id);
+  if (!current) throw new Error('Subscription not found');
+  const updated = { ...current, ...patch, id, updatedAt: now() };
+  return put('subscriptions', updated);
+}
+
+export async function archiveSubscription(id) {
+  return updateSubscription(id, { archivedAt: now() });
+}
+
+// Charges every active subscription that's missed its billing day since it
+// last ran, including a backfill for the current cycle on first run — so a
+// subscription created today for a day that already passed this month is
+// charged immediately, not silently skipped until next month. Meant to be
+// called once at app startup; there's no background execution in a static
+// offline PWA, so "automatic" only happens when the app is opened.
+export async function runDueSubscriptions() {
+  const subs = await getAll('subscriptions');
+  const today = todayISODateString();
+  let chargedAny = false;
+  for (const s of subs) {
+    if (s.archivedAt) continue;
+    const dueDate = latestOccurrenceOnOrBefore(s.dayOfMonth, today);
+    if (!s.lastChargedDate || dueDate > s.lastChargedDate) {
+      await addTransaction({ categoryId: s.categoryId, amountMinor: s.amountMinor, note: s.name, date: dueDate });
+      await put('subscriptions', { ...s, lastChargedDate: dueDate, updatedAt: now() });
+      chargedAny = true;
+    }
+  }
+  return chargedAny;
+}
+
 // ---- Export / import -----------------------------------------------------------
 
 export async function exportAll() {
-  const [settings, categories, transactions, pots, potEntries] = await Promise.all([
+  const [settings, categories, transactions, pots, potEntries, incomeEntries, subscriptions] = await Promise.all([
     getSettings(),
     getAll('categories'),
     getAll('transactions'),
     getAll('pots'),
     getAll('potEntries'),
+    getAll('incomeEntries'),
+    getAll('subscriptions'),
   ]);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: now(),
     settings,
     categories,
     transactions,
     pots,
     potEntries,
+    incomeEntries,
+    subscriptions,
   };
 }
 
 export async function importAll(data) {
   const db = await getDB();
-  const stores = ['settings', 'categories', 'transactions', 'pots', 'potEntries'];
+  const stores = ['settings', 'categories', 'transactions', 'pots', 'potEntries', 'incomeEntries', 'subscriptions'];
   await tx(db, stores, 'readwrite', async (t) => {
     for (const store of stores) {
       const clearReq = t.objectStore(store).clear();
@@ -353,5 +477,7 @@ export async function importAll(data) {
     for (const tr of data.transactions || []) t.objectStore('transactions').put(tr);
     for (const p of data.pots || []) t.objectStore('pots').put(p);
     for (const pe of data.potEntries || []) t.objectStore('potEntries').put(pe);
+    for (const ie of data.incomeEntries || []) t.objectStore('incomeEntries').put(ie);
+    for (const s of data.subscriptions || []) t.objectStore('subscriptions').put(s);
   });
 }

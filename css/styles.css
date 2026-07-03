@@ -537,6 +537,25 @@ input[type="text"], input[type="date"] {
   line-height: 1.2;
 }
 
+.color-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.color-swatch .icon { width: 16px; height: 16px; }
+
 .save-btn {
   display: block;
   width: calc(100% - 32px);

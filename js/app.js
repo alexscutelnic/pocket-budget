@@ -1,4 +1,4 @@
-import { initDB, getSettings } from './db.js';
+import { initDB, getSettings, runDueSubscriptions } from './db.js';
 import { setCurrency } from './format.js';
 import { icon } from './icons.js';
 import * as homeScreen from './screens/home.js';
@@ -71,6 +71,7 @@ function setupViewportTracking() {
 
 async function main() {
   await initDB();
+  await runDueSubscriptions();
   const settings = await getSettings();
   setCurrency(settings.currency);
   paintTabIcons();

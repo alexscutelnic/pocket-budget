@@ -52,7 +52,7 @@ All data is stored locally on-device. Designed to feel like a native Apple app.
   February), clamp to the last day of that month.
 - All "this period" totals, category progress, and the Home screen use this
   cycle. Trends aggregate per period (label periods by the month the period
-  *starts* in, e.g. "Jun 25 – Jul 24").
+  *ends* in: "Jun 25 – Jul 24" is labeled "Jul").
 
 ## Screens
 

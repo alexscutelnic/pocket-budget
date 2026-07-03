@@ -2,16 +2,20 @@ import {
   getSettings,
   updateSettings,
   listCategories,
+  updateCategory,
   listTransactions,
   addTransaction,
   updateTransaction,
   softDeleteTransaction,
   listPotEntries,
+  listIncomeEntries,
+  addIncomeEntry,
+  softDeleteIncomeEntry,
 } from '../db.js';
 import { getPeriodForDate, todayISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, formatShortDate, currencySymbol, escapeHtml } from '../format.js';
-import { icon } from '../icons.js';
-import { paletteColor } from '../palette.js';
+import { icon, CATEGORY_ICON_KEYS } from '../icons.js';
+import { paletteColor, PALETTE, labelInkForIndex } from '../palette.js';
 
 function progressClass(ratio) {
   if (ratio > 1) return 'over';
@@ -25,9 +29,11 @@ export async function mount(root) {
   let period = getPeriodForDate(settings.resetDay);
   let transactions = await listTransactions({ from: period.startISO, to: period.endISO });
   let potEntries = await listPotEntries();
+  let incomeEntries = await listIncomeEntries({ from: period.startISO, to: period.endISO });
 
   const view = { screen: 'list', categoryId: null };
-  let sheet = null; // { mode: 'add' | 'edit', categoryId, txId?, defaults? }
+  // sheet.type: 'tx' | 'income-entry' | 'category-appearance'
+  let sheet = null;
 
   async function reloadData() {
     settings = await getSettings();
@@ -35,12 +41,17 @@ export async function mount(root) {
     period = getPeriodForDate(settings.resetDay);
     transactions = await listTransactions({ from: period.startISO, to: period.endISO });
     potEntries = await listPotEntries();
+    incomeEntries = await listIncomeEntries({ from: period.startISO, to: period.endISO });
   }
 
   function categorySpend(categoryId) {
     return transactions
       .filter((t) => t.categoryId === categoryId)
       .reduce((sum, t) => sum + t.amountMinor, 0);
+  }
+
+  function extraIncomeThisPeriod() {
+    return incomeEntries.reduce((sum, e) => sum + e.amountMinor, 0);
   }
 
   // Net money moved into pots this period (deposits positive, withdrawals
@@ -65,15 +76,23 @@ export async function mount(root) {
   }
 
   function render() {
-    root.innerHTML = view.screen === 'category' ? renderCategoryDetail() : renderList();
+    root.innerHTML = view.screen === 'category' ? renderCategoryDetail()
+      : view.screen === 'income' ? renderIncomeDetail()
+      : renderList();
     if (sheet) {
-      root.insertAdjacentHTML('beforeend', renderSheet());
-      const amountInput = root.querySelector('#tx-amount');
-      if (amountInput) {
-        amountInput.focus();
+      root.insertAdjacentHTML('beforeend', renderActiveSheet());
+      const focusEl = root.querySelector('#tx-amount, #income-entry-amount');
+      if (focusEl) {
+        focusEl.focus();
         updateSaveState();
       }
     }
+  }
+
+  function renderActiveSheet() {
+    if (sheet.type === 'income-entry') return renderIncomeEntrySheet();
+    if (sheet.type === 'category-appearance') return renderAppearanceSheet();
+    return renderTxSheet();
   }
 
   // ---- List screen -----------------------------------------------------
@@ -103,7 +122,20 @@ export async function mount(root) {
       </div>
 
       ${shouldShowExportBanner() ? renderExportBanner() : ''}
-      ${settings.incomeMinor > 0 ? renderRemainingCard(totalSpent) : renderIncomeNudge()}
+      ${settings.incomeMinor > 0 || extraIncomeThisPeriod() > 0 ? renderRemainingCard(totalSpent) : renderIncomeNudge()}
+
+      <div class="card-header">Income</div>
+      <div class="card">
+        <div class="list-row tappable" data-action="open-income">
+          <div class="icon-bubble" style="background:var(--green);">${icon('arrow-up-circle')}</div>
+          <div style="flex:1;min-width:0;">
+            <div>Extra Income</div>
+            <div style="font-size:13px;color:var(--label-secondary);">${incomeEntries.length ? `${incomeEntries.length} ${incomeEntries.length === 1 ? 'entry' : 'entries'} this period` : 'Sold something? Add it here.'}</div>
+          </div>
+          <div class="category-amounts"><strong>+${formatMoney(extraIncomeThisPeriod())}</strong></div>
+          <span class="chevron">${icon('chevron', { size: 16 })}</span>
+        </div>
+      </div>
 
       <div class="card-header">Categories</div>
       <div class="card">${rows || emptyCategoriesState()}</div>
@@ -114,10 +146,14 @@ export async function mount(root) {
 
   function renderRemainingCard(totalSpent) {
     const netPotChange = netPotChangeThisPeriod();
-    const remaining = settings.incomeMinor - totalSpent - netPotChange;
-    const spentRatio = (totalSpent + netPotChange) / settings.incomeMinor;
+    const extraIncome = extraIncomeThisPeriod();
+    const totalIncome = settings.incomeMinor + extraIncome;
+    const remaining = totalIncome - totalSpent - netPotChange;
+    const spentRatio = (totalSpent + netPotChange) / totalIncome;
 
-    const breakdown = [`Income ${formatMoney(settings.incomeMinor)}`, `Spent ${formatMoney(totalSpent)}`];
+    const breakdown = [`Income ${formatMoney(settings.incomeMinor)}`];
+    if (extraIncome > 0) breakdown.push(`Extra ${formatMoney(extraIncome)}`);
+    breakdown.push(`Spent ${formatMoney(totalSpent)}`);
     if (netPotChange > 0) breakdown.push(`Saved ${formatMoney(netPotChange)}`);
     else if (netPotChange < 0) breakdown.push(`Withdrew ${formatMoney(-netPotChange)}`);
 
@@ -125,7 +161,7 @@ export async function mount(root) {
       <div class="card summary-card">
         <div class="summary-row">
           <span class="summary-spent">${formatMoney(remaining)}</span>
-          <span class="summary-limit">of ${formatMoney(settings.incomeMinor)}</span>
+          <span class="summary-limit">of ${formatMoney(totalIncome)}</span>
         </div>
         <p class="summary-caption" style="${remaining < 0 ? 'color:var(--red)' : ''}">${remaining < 0 ? 'over your income this period' : 'remaining this period'}</p>
         <div class="summary-progress progress-track">
@@ -134,6 +170,45 @@ export async function mount(root) {
         <p class="summary-breakdown">${breakdown.join(' · ')}</p>
       </div>
     `;
+  }
+
+  // ---- Extra income detail screen ------------------------------------------
+
+  function renderIncomeDetail() {
+    const total = extraIncomeThisPeriod();
+    const rows = incomeEntries.map((e) => `
+      <div class="list-row tx-row entry-row">
+        <div class="tx-date">${formatShortDate(e.date)}</div>
+        <div class="tx-note">
+          <div class="note-text ${e.note ? '' : 'no-note'}">${escapeHtml(e.note) || 'Extra income'}</div>
+        </div>
+        <div class="tx-amount entry-amount positive">+${formatMoney(e.amountMinor)}</div>
+        <div class="row-actions" style="padding:0;">
+          <button data-action="delete-income-entry" data-entry-id="${e.id}" aria-label="Delete" style="color:var(--red)">${icon('trash')}</button>
+        </div>
+      </div>`).join('');
+
+    return `
+      <div class="nav-bar">
+        <button class="back-btn" data-action="back-to-list">${icon('chevron', { className: 'back-chevron' })}<span>Home</span></button>
+      </div>
+      <div class="large-title-header">
+        <div class="icon-bubble" style="background:var(--green);margin-bottom:8px;">${icon('arrow-up-circle')}</div>
+        <h1 class="title">Extra Income</h1>
+        <p class="subtitle">+${formatMoney(total)} · ${period.label}</p>
+      </div>
+      <div class="card-header">Entries</div>
+      <div class="card">${rows || emptyIncomeState()}</div>
+      <button class="fab" data-action="open-income-entry" aria-label="Add extra income">${icon('plus')}</button>
+    `;
+  }
+
+  function emptyIncomeState() {
+    return `<div class="empty-state">
+      <div class="icon-bubble">${icon('arrow-up-circle')}</div>
+      <h3>No extra income yet</h3>
+      <p>One-off money you add here counts toward this period's income.</p>
+    </div>`;
   }
 
   function renderIncomeNudge() {
@@ -197,6 +272,7 @@ export async function mount(root) {
     return `
       <div class="nav-bar">
         <button class="back-btn" data-action="back-to-list">${icon('chevron', { className: 'back-chevron' })}<span>Home</span></button>
+        <button class="nav-btn" data-action="open-appearance">${icon('pencil')}<span>Edit</span></button>
       </div>
       <div class="large-title-header">
         <div class="icon-bubble" style="background:${paletteColor(category.colorIndex)};margin-bottom:8px;">${icon(category.icon)}</div>
@@ -225,6 +301,7 @@ export async function mount(root) {
   function openAddSheet() {
     const defaultCategoryId = view.screen === 'category' ? view.categoryId : (categories[0]?.id ?? null);
     sheet = {
+      type: 'tx',
       mode: 'add',
       categoryId: defaultCategoryId,
       defaults: { amountMinor: null, note: '', date: todayISODateString() },
@@ -236,6 +313,7 @@ export async function mount(root) {
     const t = transactions.find((tx) => tx.id === txId);
     if (!t) return;
     sheet = {
+      type: 'tx',
       mode: 'edit',
       txId,
       categoryId: t.categoryId,
@@ -249,7 +327,7 @@ export async function mount(root) {
     render();
   }
 
-  function renderSheet() {
+  function renderTxSheet() {
     const chips = categories.map((c) => `
       <div class="category-chip ${c.id === sheet.categoryId ? 'selected' : ''}" data-action="select-category" data-category-id="${c.id}">
         <div class="icon-bubble" style="background:${paletteColor(c.colorIndex)}">${icon(c.icon)}</div>
@@ -291,6 +369,16 @@ export async function mount(root) {
   }
 
   function updateSaveState() {
+    if (!sheet) return;
+    if (sheet.type === 'income-entry') {
+      const amountInput = root.querySelector('#income-entry-amount');
+      const saveBtn = root.querySelector('#income-entry-save');
+      if (!amountInput || !saveBtn) return;
+      const minor = parseAmountToMinor(amountInput.value);
+      saveBtn.disabled = !(minor != null && minor > 0);
+      return;
+    }
+    if (sheet.type === 'category-appearance') return;
     const amountInput = root.querySelector('#tx-amount');
     const saveBtn = root.querySelector('#tx-save');
     if (!amountInput || !saveBtn) return;
@@ -299,7 +387,7 @@ export async function mount(root) {
     saveBtn.disabled = !valid;
   }
 
-  async function saveSheet() {
+  async function saveTxSheet() {
     const amountInput = root.querySelector('#tx-amount');
     const noteInput = root.querySelector('#tx-note');
     const dateInput = root.querySelector('#tx-date');
@@ -331,6 +419,112 @@ export async function mount(root) {
     render();
   }
 
+  // ---- Extra income sheet -------------------------------------------------
+
+  function openIncomeEntrySheet() {
+    sheet = {
+      type: 'income-entry',
+      defaults: { amountMinor: null, note: '', date: todayISODateString() },
+    };
+    render();
+  }
+
+  function renderIncomeEntrySheet() {
+    const amountValue = sheet.defaults.amountMinor != null ? (sheet.defaults.amountMinor / 100).toFixed(2) : '';
+    return `
+      <div class="sheet-backdrop">
+        <div class="sheet">
+          <div class="sheet-header">
+            <h2>Add Extra Income</h2>
+            <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
+          </div>
+
+          <input id="income-entry-amount" class="amount-input" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${amountValue}" />
+
+          <div class="field-group">
+            <p class="field-label">Note (optional)</p>
+            <input id="income-entry-note" type="text" placeholder="e.g. Sold old phone" value="${escapeHtml(sheet.defaults.note)}" />
+          </div>
+
+          <div class="field-group">
+            <p class="field-label">Date</p>
+            <input id="income-entry-date" type="date" value="${sheet.defaults.date}" />
+          </div>
+
+          <button id="income-entry-save" class="save-btn" data-action="save-income-entry">Save</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function saveIncomeEntrySheet() {
+    const amountMinor = parseAmountToMinor(root.querySelector('#income-entry-amount').value);
+    if (amountMinor == null || amountMinor <= 0) return;
+    const note = root.querySelector('#income-entry-note').value.trim();
+    const date = root.querySelector('#income-entry-date').value || todayISODateString();
+
+    await addIncomeEntry({ amountMinor, note, date });
+    sheet = null;
+    await reloadData();
+    render();
+  }
+
+  async function deleteIncomeEntry(entryId) {
+    if (!window.confirm('Delete this income entry?')) return;
+    await softDeleteIncomeEntry(entryId);
+    await reloadData();
+    render();
+  }
+
+  // ---- Category appearance sheet (icon + color) ---------------------------
+
+  function openAppearanceSheet() {
+    const category = categories.find((c) => c.id === view.categoryId);
+    if (!category) return;
+    sheet = { type: 'category-appearance', categoryId: category.id, icon: category.icon, colorIndex: category.colorIndex };
+    render();
+  }
+
+  function renderAppearanceSheet() {
+    const icons = CATEGORY_ICON_KEYS.map((key) => `
+      <div class="category-chip ${key === sheet.icon ? 'selected' : ''}" data-action="select-appearance-icon" data-icon-key="${key}">
+        <div class="icon-bubble" style="background:${key === sheet.icon ? paletteColor(sheet.colorIndex) : 'var(--fill-quaternary)'};color:${key === sheet.icon ? '#fff' : 'var(--label-secondary)'}">${icon(key)}</div>
+      </div>`).join('');
+
+    const swatches = PALETTE.map((_, i) => `
+      <button class="color-swatch" data-action="select-appearance-color" data-color-index="${i}" style="background:${paletteColor(i)};color:${labelInkForIndex(i)}" aria-label="Color ${i + 1}">${i === sheet.colorIndex ? icon('checkmark', { size: 16 }) : ''}</button>`).join('');
+
+    return `
+      <div class="sheet-backdrop">
+        <div class="sheet">
+          <div class="sheet-header">
+            <h2>Edit Appearance</h2>
+            <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
+          </div>
+
+          <div class="field-group">
+            <p class="field-label">Icon</p>
+          </div>
+          <div class="category-picker">${icons}</div>
+
+          <div class="field-group" style="margin-top:12px;">
+            <p class="field-label">Color</p>
+          </div>
+          <div class="color-picker">${swatches}</div>
+
+          <button id="appearance-save" class="save-btn" data-action="save-appearance">Save</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function saveAppearanceSheet() {
+    await updateCategory(sheet.categoryId, { icon: sheet.icon, colorIndex: sheet.colorIndex });
+    sheet = null;
+    await reloadData();
+    render();
+  }
+
   // ---- Event delegation ---------------------------------------------------
 
   root.addEventListener('click', async (e) => {
@@ -356,6 +550,10 @@ export async function mount(root) {
       view.categoryId = null;
       return render();
     }
+    if (action === 'open-income') {
+      view.screen = 'income';
+      return render();
+    }
     if (action === 'select-category') {
       sheet.categoryId = actionEl.dataset.categoryId;
       root.querySelectorAll('.category-chip').forEach((chip) => {
@@ -367,7 +565,20 @@ export async function mount(root) {
     if (action === 'edit-tx') return openEditSheet(actionEl.dataset.txId);
     if (action === 'delete-tx') return deleteTransaction(actionEl.dataset.txId);
     if (action === 'delete-tx-in-sheet') return deleteTransaction(sheet.txId);
-    if (action === 'save-tx') return saveSheet();
+    if (action === 'save-tx') return saveTxSheet();
+    if (action === 'open-income-entry') return openIncomeEntrySheet();
+    if (action === 'save-income-entry') return saveIncomeEntrySheet();
+    if (action === 'delete-income-entry') return deleteIncomeEntry(actionEl.dataset.entryId);
+    if (action === 'open-appearance') return openAppearanceSheet();
+    if (action === 'select-appearance-icon') {
+      sheet.icon = actionEl.dataset.iconKey;
+      return render();
+    }
+    if (action === 'select-appearance-color') {
+      sheet.colorIndex = Number(actionEl.dataset.colorIndex);
+      return render();
+    }
+    if (action === 'save-appearance') return saveAppearanceSheet();
     if (action === 'goto-settings') {
       root.dispatchEvent(new CustomEvent('navigate', { detail: { tab: 'settings' }, bubbles: true }));
       return;
@@ -380,7 +591,8 @@ export async function mount(root) {
   });
 
   root.addEventListener('input', (e) => {
-    if (e.target.id === 'tx-amount' && sheet) updateSaveState();
+    if (!sheet) return;
+    if (['tx-amount', 'income-entry-amount'].includes(e.target.id)) updateSaveState();
   });
 
   render();

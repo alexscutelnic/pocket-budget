@@ -9,8 +9,11 @@ const MONTH_SHORT = new Intl.DateTimeFormat('en-GB', { month: 'short' });
 const DEFAULT_PERIOD_COUNT = 6;
 const PERIOD_COUNT_OPTIONS = [3, 6, 12];
 
+// A period is labeled by the month it ENDS in (its last included day, since
+// period.end is exclusive): Jun 25 – Jul 24 reads as "Jul" — the month most
+// of the cycle covers and the payday month people think of it as.
 function shortLabel(period) {
-  return MONTH_SHORT.format(period.start);
+  return MONTH_SHORT.format(new Date(period.end.getTime() - 86400000));
 }
 
 function compactMoney(minor) {
