@@ -32,6 +32,11 @@
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The tab bar overlaps part of the home-indicator inset instead of sitting
+     wholly above it — full inset below the labels reads ~14px too tall in
+     standalone mode vs a native tab bar. Min 6px keeps breathing room in a
+     browser tab where the inset is 0. */
+  --tab-bar-pad-bottom: max(calc(var(--safe-bottom) - 14px), 6px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -109,7 +114,7 @@ button {
 .screen-container {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: calc(64px + var(--safe-bottom) + 24px);
+  padding-bottom: calc(64px + var(--tab-bar-pad-bottom) + 24px);
   position: relative;
 }
 
@@ -354,7 +359,7 @@ button {
 .fab {
   position: fixed;
   right: 20px;
-  bottom: calc(64px + var(--safe-bottom) + 16px);
+  bottom: calc(64px + var(--tab-bar-pad-bottom) + 16px);
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -381,7 +386,7 @@ button {
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-top: 0.5px solid var(--separator);
-  padding: 4px 0 var(--safe-bottom);
+  padding: 4px 0 var(--tab-bar-pad-bottom);
   flex-shrink: 0;
 }
 

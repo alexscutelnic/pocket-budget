@@ -89,7 +89,25 @@ async function main() {
   await renderTab(initialTab());
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      // iOS keeps installed PWAs alive in the app switcher for days, so the
+      // registration-time update check rarely runs — re-check every time the
+      // app comes back to the foreground.
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) reg.update().catch(() => {});
+      });
+    }).catch(() => {});
+
+    // The SW uses skipWaiting + clients.claim, so an updated SW takes control
+    // of this open page as soon as it activates. Reload once at that moment
+    // so the user gets the new version on THIS open instead of the next one.
+    // Guard: on the very first install there was no previous controller —
+    // reloading then would be a pointless flash.
+    let hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) window.location.reload();
+      hadController = true;
+    });
   }
 }
 
