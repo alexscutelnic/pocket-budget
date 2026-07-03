@@ -1,5 +1,6 @@
 import { initDB, getSettings, runDueSubscriptions } from './db.js';
 import { setCurrency } from './format.js';
+import { setLanguage, getLanguage, t } from './i18n.js';
 import { icon } from './icons.js';
 import * as homeScreen from './screens/home.js';
 import * as potsScreen from './screens/pots.js';
@@ -36,9 +37,16 @@ async function renderTab(tab) {
   }
 }
 
+const TAB_LABELS = { home: 'Home', pots: 'Pots', trends: 'Trends', settings: 'Settings' };
+
 function paintTabIcons() {
   tabBar.querySelectorAll('.tab-icon').forEach((el) => {
     el.innerHTML = icon(el.dataset.icon, { size: 25 });
+  });
+  tabBar.querySelectorAll('.tab-btn').forEach((btn) => {
+    const label = t(TAB_LABELS[btn.dataset.tab]);
+    btn.querySelector('.tab-label').textContent = label;
+    btn.setAttribute('aria-label', label);
   });
 }
 
@@ -74,6 +82,8 @@ async function main() {
   await runDueSubscriptions();
   const settings = await getSettings();
   setCurrency(settings.currency);
+  setLanguage(settings.language);
+  document.documentElement.lang = getLanguage();
   paintTabIcons();
   setupViewportTracking();
 

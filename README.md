@@ -58,9 +58,10 @@ as noise, £180/yr reads as a decision.
 
 ### Settings
 
-Income, reset day, currency, category management (rename, re-icon, recolor,
-reorder, archive), subscriptions, and full JSON export/import for backups.
-If you haven't backed up in over 30 days, Home shows a gentle nudge.
+Income, reset day, currency, interface language (English or Russian),
+category management (rename, re-icon, recolor, reorder, archive),
+subscriptions, and full JSON export/import for backups. If you haven't
+backed up in over 30 days, Home shows a gentle nudge.
 
 ## Tech
 

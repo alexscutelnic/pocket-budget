@@ -9,6 +9,7 @@ import {
 } from '../db.js';
 import { todayISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, formatShortDate, formatLongDate, currencySymbol, escapeHtml } from '../format.js';
+import { t, tn } from '../i18n.js';
 import { icon, POT_ICON_KEYS } from '../icons.js';
 import { paletteColor } from '../palette.js';
 
@@ -76,34 +77,34 @@ export async function mount(root) {
 
     return `
       <div class="large-title-header">
-        <h1 class="title">Pots</h1>
-        <p class="subtitle">${pots.length ? `${formatMoney(totalSaved)} saved across ${pots.length} pot${pots.length === 1 ? '' : 's'}` : 'No pots yet'}</p>
+        <h1 class="title">${t('Pots')}</h1>
+        <p class="subtitle">${pots.length ? `${formatMoney(totalSaved)} ${tn('saved-across-pots', pots.length)}` : t('No pots yet')}</p>
       </div>
 
       ${pots.length ? `
         <div class="card summary-card">
           <div class="summary-row">
             <span class="summary-spent">${formatMoney(totalSaved)}</span>
-            <span class="summary-limit">of ${formatMoney(totalTarget)}</span>
+            <span class="summary-limit">${t('of {amount}', { amount: formatMoney(totalTarget) })}</span>
           </div>
-          <p class="summary-caption">saved toward targets</p>
+          <p class="summary-caption">${t('saved toward targets')}</p>
           <div class="summary-progress progress-track">
             <div class="progress-fill" style="width:${Math.min(overallRatio, 1) * 100}%;background:${ringColor(overallRatio)}"></div>
           </div>
         </div>
-        <div class="card-header">Savings</div>
+        <div class="card-header">${t('Savings')}</div>
         <div class="card">${rows}</div>
       ` : emptyPotsState()}
 
-      <button class="fab" data-action="open-add-pot" aria-label="New pot">${icon('plus')}</button>
+      <button class="fab" data-action="open-add-pot" aria-label="${t('New Pot')}">${icon('plus')}</button>
     `;
   }
 
   function emptyPotsState() {
     return `<div class="empty-state">
       <div class="icon-bubble">${icon('pots')}</div>
-      <h3>No pots yet</h3>
-      <p>Create a pot to start saving toward something.</p>
+      <h3>${t('No pots yet')}</h3>
+      <p>${t('Create a pot to start saving toward something.')}</p>
     </div>`;
   }
 
@@ -125,7 +126,7 @@ export async function mount(root) {
         <div class="list-row tx-row entry-row">
           <div class="tx-date">${formatShortDate(e.date)}</div>
           <div class="tx-note">
-            <div class="note-text ${e.note ? '' : 'no-note'}">${escapeHtml(e.note) || (positive ? 'Added money' : 'Withdrawal')}</div>
+            <div class="note-text ${e.note ? '' : 'no-note'}">${escapeHtml(e.note) || (positive ? t('Added money') : t('Withdrawal'))}</div>
           </div>
           <div class="tx-amount entry-amount ${positive ? 'positive' : 'negative'}">${positive ? '+' : '−'}${formatMoney(Math.abs(e.amountMinor))}</div>
           <div class="row-actions" style="padding:0;">
@@ -136,27 +137,27 @@ export async function mount(root) {
 
     return `
       <div class="nav-bar">
-        <button class="back-btn" data-action="back-to-pots">${icon('chevron', { className: 'back-chevron' })}<span>Pots</span></button>
-        <button class="nav-btn" data-action="edit-pot">${icon('pencil')}<span>Edit</span></button>
+        <button class="back-btn" data-action="back-to-pots">${icon('chevron', { className: 'back-chevron' })}<span>${t('Pots')}</span></button>
+        <button class="nav-btn" data-action="edit-pot">${icon('pencil')}<span>${t('Edit')}</span></button>
       </div>
       <div class="large-title-header" style="text-align:center;">
         <h1 class="title">${escapeHtml(pot.name)}</h1>
-        <p class="subtitle">${pot.targetDate ? `Target: ${formatLongDate(pot.targetDate)}` : 'No target date'}</p>
+        <p class="subtitle">${pot.targetDate ? t('Target: {date}', { date: formatLongDate(pot.targetDate) }) : t('No target date')}</p>
       </div>
       <div class="pot-detail-ring-wrap">
         <div class="ring-center">
           ${ring(ratio, { size: 160, stroke: 12, color: ringColor(ratio) })}
           <div class="ring-label">
             <span class="ring-saved">${formatMoney(saved)}</span>
-            <span class="ring-target">of ${formatMoney(pot.targetMinor)}</span>
+            <span class="ring-target">${t('of {amount}', { amount: formatMoney(pot.targetMinor) })}</span>
           </div>
         </div>
       </div>
       <div class="row-actions" style="margin-top:8px;">
-        <button data-action="open-deposit">${icon('arrow-up-circle')} Add Money</button>
-        <button data-action="open-withdraw">${icon('arrow-down-circle')} Withdraw</button>
+        <button data-action="open-deposit">${icon('arrow-up-circle')} ${t('Add Money')}</button>
+        <button data-action="open-withdraw">${icon('arrow-down-circle')} ${t('Withdraw')}</button>
       </div>
-      <div class="card-header">History</div>
+      <div class="card-header">${t('History')}</div>
       <div class="card">${rows || emptyEntriesState()}</div>
     `;
   }
@@ -164,8 +165,8 @@ export async function mount(root) {
   function emptyEntriesState() {
     return `<div class="empty-state">
       <div class="icon-bubble">${icon('doc-text')}</div>
-      <h3>No activity yet</h3>
-      <p>Money you add or withdraw will show up here.</p>
+      <h3>${t('No activity yet')}</h3>
+      <p>${t('Money you add or withdraw will show up here.')}</p>
     </div>`;
   }
 
@@ -200,32 +201,32 @@ export async function mount(root) {
       <div class="sheet-backdrop">
         <div class="sheet">
           <div class="sheet-header">
-            <h2>${sheet.mode === 'edit' ? 'Edit Pot' : 'New Pot'}</h2>
+            <h2>${sheet.mode === 'edit' ? t('Edit Pot') : t('New Pot')}</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
 
           <div class="field-group">
-            <p class="field-label">Name</p>
-            <input id="pot-name" type="text" placeholder="e.g. Holiday" value="${escapeHtml(sheet.defaults.name)}" />
+            <p class="field-label">${t('Name')}</p>
+            <input id="pot-name" type="text" placeholder="${t('e.g. Holiday')}" value="${escapeHtml(sheet.defaults.name)}" />
           </div>
 
           <div class="field-group">
-            <p class="field-label">Icon</p>
+            <p class="field-label">${t('Icon')}</p>
           </div>
           <div class="category-picker">${icons}</div>
 
           <div class="field-group" style="margin-top:12px;">
-            <p class="field-label">Target amount</p>
+            <p class="field-label">${t('Target amount')}</p>
             <input id="pot-target" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${targetValue}" />
           </div>
 
           <div class="field-group">
-            <p class="field-label">Target date (optional)</p>
+            <p class="field-label">${t('Target date (optional)')}</p>
             <input id="pot-target-date" type="date" value="${sheet.defaults.targetDate}" />
           </div>
 
-          <button id="pot-save" class="save-btn" data-action="save-pot">Save</button>
-          ${sheet.mode === 'edit' ? `<div class="row-actions" style="margin-top:10px;"><button class="destructive" data-action="archive-pot-in-sheet">${icon('trash')} Archive Pot</button></div>` : ''}
+          <button id="pot-save" class="save-btn" data-action="save-pot">${t('Save')}</button>
+          ${sheet.mode === 'edit' ? `<div class="row-actions" style="margin-top:10px;"><button class="destructive" data-action="archive-pot-in-sheet">${icon('trash')} ${t('Archive Pot')}</button></div>` : ''}
         </div>
       </div>
     `;
@@ -249,7 +250,7 @@ export async function mount(root) {
   }
 
   async function archiveCurrentPot() {
-    if (!window.confirm('Archive this pot? It will be hidden from your pots list.')) return;
+    if (!window.confirm(t('Archive this pot? It will be hidden from your pots list.'))) return;
     await archivePot(sheet.potId);
     sheet = null;
     view.screen = 'list';
@@ -274,23 +275,23 @@ export async function mount(root) {
       <div class="sheet-backdrop">
         <div class="sheet">
           <div class="sheet-header">
-            <h2>${sheet.mode === 'withdraw' ? 'Withdraw' : 'Add Money'}</h2>
+            <h2>${sheet.mode === 'withdraw' ? t('Withdraw') : t('Add Money')}</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
 
           <input id="entry-amount" class="amount-input" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${amountValue}" />
 
           <div class="field-group">
-            <p class="field-label">Note (optional)</p>
-            <input id="entry-note" type="text" placeholder="e.g. Birthday money" value="${escapeHtml(sheet.defaults.note)}" />
+            <p class="field-label">${t('Note (optional)')}</p>
+            <input id="entry-note" type="text" placeholder="${t('e.g. Birthday money')}" value="${escapeHtml(sheet.defaults.note)}" />
           </div>
 
           <div class="field-group">
-            <p class="field-label">Date</p>
+            <p class="field-label">${t('Date')}</p>
             <input id="entry-date" type="date" value="${sheet.defaults.date}" />
           </div>
 
-          <button id="entry-save" class="save-btn" data-action="save-entry">Save</button>
+          <button id="entry-save" class="save-btn" data-action="save-entry">${t('Save')}</button>
         </div>
       </div>
     `;
@@ -317,7 +318,7 @@ export async function mount(root) {
   }
 
   async function deleteEntry(entryId) {
-    if (!window.confirm('Delete this entry?')) return;
+    if (!window.confirm(t('Delete this entry?'))) return;
     await softDeletePotEntry(entryId);
     await reloadData();
     render();

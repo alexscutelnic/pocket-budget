@@ -4,8 +4,8 @@ import { formatMoney, formatShortDate, escapeHtml } from '../format.js';
 import { icon } from '../icons.js';
 import { paletteColor, labelInkForIndex } from '../palette.js';
 import { barChart, stackedBarChart, lineChart, paceLineChart, legend } from '../charts.js';
+import { t, tn, dateLocale } from '../i18n.js';
 
-const MONTH_SHORT = new Intl.DateTimeFormat('en-GB', { month: 'short' });
 const DEFAULT_PERIOD_COUNT = 6;
 const PERIOD_COUNT_OPTIONS = [3, 6, 12];
 
@@ -13,7 +13,7 @@ const PERIOD_COUNT_OPTIONS = [3, 6, 12];
 // period.end is exclusive): Jun 25 – Jul 24 reads as "Jul" — the month most
 // of the cycle covers and the payday month people think of it as.
 function shortLabel(period) {
-  return MONTH_SHORT.format(new Date(period.end.getTime() - 86400000));
+  return new Intl.DateTimeFormat(dateLocale(), { month: 'short' }).format(new Date(period.end.getTime() - 86400000));
 }
 
 function compactMoney(minor) {
@@ -57,7 +57,7 @@ export async function mount(root) {
   function renderOverview() {
     return `
       <div class="large-title-header">
-        <h1 class="title">Trends</h1>
+        <h1 class="title">${t('Trends')}</h1>
       </div>
       ${renderPeriodSlicer()}
       ${hasAnyData ? renderContent() : renderEmptyScreen()}
@@ -67,7 +67,7 @@ export async function mount(root) {
   function renderPeriodSlicer() {
     return `
       <div class="segmented-control">
-        ${PERIOD_COUNT_OPTIONS.map((n) => `<button class="${n === periodCount ? 'active' : ''}" data-action="set-period-count" data-count="${n}">Last ${n}</button>`).join('')}
+        ${PERIOD_COUNT_OPTIONS.map((n) => `<button class="${n === periodCount ? 'active' : ''}" data-action="set-period-count" data-count="${n}">${t('Last {n}', { n })}</button>`).join('')}
       </div>
     `;
   }
@@ -96,8 +96,8 @@ export async function mount(root) {
   function renderEmptyScreen() {
     return `<div class="empty-state">
       <div class="icon-bubble">${icon('trends')}</div>
-      <h3>Nothing to show yet</h3>
-      <p>Once you've logged some spending or added money to a pot, your trends will show up here.</p>
+      <h3>${t('Nothing to show yet')}</h3>
+      <p>${t("Once you've logged some spending or added money to a pot, your trends will show up here.")}</p>
     </div>`;
   }
 
@@ -134,7 +134,7 @@ export async function mount(root) {
     const prevHasData = (prevCum[prevCum.length - 1] || 0) > 0;
 
     if (spentSoFar === 0 && !prevHasData) {
-      return `<div class="card-header">This period, day by day</div><div class="card">${chartEmptyNote('No spending recorded yet.')}</div>`;
+      return `<div class="card-header">${t('This period, day by day')}</div><div class="card">${chartEmptyNote(t('No spending recorded yet.'))}</div>`;
     }
 
     const sameDayIdx = Math.min(todayIdx, prevCum.length - 1);
@@ -143,8 +143,8 @@ export async function mount(root) {
     const up = delta > 0;
     const deltaColor = delta === 0 ? 'var(--label-secondary)' : (up ? 'var(--red)' : 'var(--green)');
     const deltaLabel = delta === 0
-      ? 'Level with this point last period'
-      : `${formatMoney(Math.abs(delta))} ${up ? 'more' : 'less'} than this point last period`;
+      ? t('Level with this point last period')
+      : t(up ? '{amount} more than this point last period' : '{amount} less than this point last period', { amount: formatMoney(Math.abs(delta)) });
 
     // Biggest mover on the same day-for-day basis as the rest of the card:
     // each category's spend so far this period vs its spend by the same day
@@ -187,13 +187,13 @@ export async function mount(root) {
 
     const chartLegend = prevHasData
       ? legend([
-          { label: 'This period', color: 'var(--blue)' },
-          { label: 'Last period', color: 'color-mix(in srgb, var(--blue) 35%, transparent)' },
+          { label: t('This period'), color: 'var(--blue)' },
+          { label: t('Last period'), color: 'color-mix(in srgb, var(--blue) 35%, transparent)' },
         ])
       : '';
 
     return `
-      <div class="card-header">This period, day by day</div>
+      <div class="card-header">${t('This period, day by day')}</div>
       <div class="card chart-card">
         <div class="summary-row" style="padding:12px 12px 0;">
           <span class="summary-spent">${formatMoney(spentSoFar)}</span>
@@ -202,12 +202,12 @@ export async function mount(root) {
         <p class="summary-caption" style="color:${deltaColor};padding:0 12px;">
           ${delta !== 0 ? icon(up ? 'arrow-up-circle' : 'arrow-down-circle', { size: 14 }) : ''} ${deltaLabel}
         </p>
-        ${projectedTotal != null ? `<p class="summary-caption" style="padding:0 12px;">On track for ~${formatMoney(projectedTotal)} this period</p>` : ''}
+        ${projectedTotal != null ? `<p class="summary-caption" style="padding:0 12px;">${t('On track for ~{amount} this period', { amount: formatMoney(projectedTotal) })}</p>` : ''}
         ${chart}
         ${chartLegend}
         ${mover && moverDiff !== 0 ? `
           <div class="mover-row" style="margin:10px 12px 4px;">
-            <span class="mover-label">Biggest mover</span>
+            <span class="mover-label">${t('Biggest mover')}</span>
             <span class="mover-value">${escapeHtml(mover.name)} ${moverDiff > 0 ? '+' : '−'}${formatMoney(Math.abs(moverDiff))}</span>
           </div>` : ''}
       </div>
@@ -216,18 +216,18 @@ export async function mount(root) {
 
   function renderSpendPerPeriodCard(periodStats) {
     if (allTx.length === 0) {
-      return `<div class="card-header">Spend per period</div><div class="card">${chartEmptyNote('No spending recorded yet.')}</div>`;
+      return `<div class="card-header">${t('Spend per period')}</div><div class="card">${chartEmptyNote(t('No spending recorded yet.'))}</div>`;
     }
     const bars = periodStats.map((ps) => ({ label: shortLabel(ps.period), value: ps.total }));
     return `
-      <div class="card-header">Spend per period</div>
+      <div class="card-header">${t('Spend per period')}</div>
       <div class="card chart-card">${barChart(bars, { valueFormatter: compactMoney })}</div>
     `;
   }
 
   function renderSpendByCategoryCard(periodStats) {
     if (allTx.length === 0) {
-      return `<div class="card-header">Spend by category</div><div class="card">${chartEmptyNote('No spending recorded yet.')}</div>`;
+      return `<div class="card-header">${t('Spend by category')}</div><div class="card">${chartEmptyNote(t('No spending recorded yet.'))}</div>`;
     }
     const series = categories.map((c) => ({
       id: c.id,
@@ -240,25 +240,25 @@ export async function mount(root) {
     const chartPeriods = periodStats.map((ps) => ({ key: ps.key, label: shortLabel(ps.period) }));
 
     return `
-      <div class="card-header">Spend by category</div>
+      <div class="card-header">${t('Spend by category')}</div>
       <div class="card chart-card">
         ${stackedBarChart(chartPeriods, activeSeries)}
         ${legend(activeSeries.map((s) => ({ id: s.id, label: s.label, color: s.color })))}
-        <p class="field-label" style="padding:8px 12px 0;">Tap a category to see how it breaks down.</p>
+        <p class="field-label" style="padding:8px 12px 0;">${t('Tap a category to see how it breaks down.')}</p>
       </div>
     `;
   }
 
   function renderSavingsCard() {
     if (allPotEntries.length === 0) {
-      return `<div class="card-header">Total savings</div><div class="card">${chartEmptyNote('No pot activity yet.')}</div>`;
+      return `<div class="card-header">${t('Total savings')}</div><div class="card">${chartEmptyNote(t('No pot activity yet.'))}</div>`;
     }
     const points = chronological.map((p) => ({
       label: shortLabel(p),
       value: allPotEntries.filter((e) => e.date < p.endISO).reduce((sum, e) => sum + e.amountMinor, 0),
     }));
     return `
-      <div class="card-header">Total savings</div>
+      <div class="card-header">${t('Total savings')}</div>
       <div class="card chart-card">${lineChart(points, { valueFormatter: compactMoney })}</div>
     `;
   }
@@ -282,12 +282,12 @@ export async function mount(root) {
     const total = txs.reduce((sum, t) => sum + t.amountMinor, 0);
 
     const groups = new Map();
-    for (const t of txs) {
-      const trimmed = (t.note || '').trim();
+    for (const tx of txs) {
+      const trimmed = (tx.note || '').trim();
       const key = trimmed ? trimmed.toLowerCase() : '\0none';
-      if (!groups.has(key)) groups.set(key, { label: trimmed || 'No note', amount: 0, count: 0 });
+      if (!groups.has(key)) groups.set(key, { label: trimmed || t('No note'), amount: 0, count: 0 });
       const g = groups.get(key);
-      g.amount += t.amountMinor;
+      g.amount += tx.amountMinor;
       g.count += 1;
     }
     const rows = Array.from(groups.values()).sort((a, b) => b.amount - a.amount);
@@ -309,15 +309,15 @@ export async function mount(root) {
 
     return `
       <div class="nav-bar">
-        <button class="back-btn" data-action="back-to-trends">${icon('chevron', { className: 'back-chevron' })}<span>Trends</span></button>
+        <button class="back-btn" data-action="back-to-trends">${icon('chevron', { className: 'back-chevron' })}<span>${t('Trends')}</span></button>
       </div>
       <div class="large-title-header" style="text-align:center;">
         <div class="icon-bubble" style="background:${color};margin:0 auto 8px;">${icon(category.icon)}</div>
         <h1 class="title">${escapeHtml(category.name)}</h1>
-        <p class="subtitle">${formatMoney(total)} · last ${chronological.length} periods</p>
+        <p class="subtitle">${formatMoney(total)} · ${tn('last-n-periods', chronological.length)}</p>
       </div>
-      <div class="card-header">By note</div>
-      <div class="card">${rowsHtml || chartEmptyNote('No transactions in this range yet.')}</div>
+      <div class="card-header">${t('By note')}</div>
+      <div class="card">${rowsHtml || chartEmptyNote(t('No transactions in this range yet.'))}</div>
     `;
   }
 

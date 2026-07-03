@@ -121,6 +121,7 @@ export async function initDB() {
       id: 'settings',
       resetDay: 25,
       currency: 'GBP',
+      language: 'en',
       incomeMinor: 0,
       schemaVersion: 1,
       lastExportAt: null,

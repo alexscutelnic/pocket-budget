@@ -1,7 +1,14 @@
 // Pay-cycle math: periods run resetDay -> resetDay (exclusive), clamped to
 // the last day of shorter months.
 
-const MONTH_SHORT = new Intl.DateTimeFormat('en-GB', { month: 'short' });
+import { dateLocale } from './i18n.js';
+
+// Day + month formatted together by Intl so each locale gets its own word
+// order AND grammar — Russian needs the genitive ("25 июня", not "25 июнь"),
+// which only combined formatting produces.
+function monthDay(date) {
+  return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short' }).format(date);
+}
 
 function daysInMonth(year, monthIndex) {
   return new Date(year, monthIndex + 1, 0).getDate();
@@ -56,10 +63,7 @@ export function getPeriodForDate(resetDay, refDate = new Date()) {
   const lastDay = new Date(periodEnd.getTime() - 86400000);
   const daysRemaining = Math.max(0, Math.round((periodEnd - ref) / 86400000));
 
-  const sameMonth = periodStart.getMonth() === lastDay.getMonth() && periodStart.getFullYear() === lastDay.getFullYear();
-  const label = sameMonth
-    ? `${MONTH_SHORT.format(periodStart)} ${periodStart.getDate()} – ${lastDay.getDate()}`
-    : `${MONTH_SHORT.format(periodStart)} ${periodStart.getDate()} – ${MONTH_SHORT.format(lastDay)} ${lastDay.getDate()}`;
+  const label = `${monthDay(periodStart)} – ${monthDay(lastDay)}`;
 
   return {
     start: periodStart,

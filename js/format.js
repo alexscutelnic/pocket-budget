@@ -3,6 +3,8 @@
 // Formatting uses the device's own locale (undefined) so decimal/thousands
 // separators and symbol placement follow the user's own region, while the
 // currency itself follows what they picked in the app.
+import { dateLocale } from './i18n.js';
+
 let currentCurrency = 'GBP';
 const formatterCache = new Map();
 const symbolCache = new Map();
@@ -47,13 +49,13 @@ export function parseAmountToMinor(input) {
 export function formatShortDate(isoDateString) {
   const [y, m, d] = isoDateString.split('-').map(Number);
   const date = new Date(y, m - 1, d);
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(date);
+  return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short' }).format(date);
 }
 
 export function formatLongDate(isoDateString) {
   const [y, m, d] = isoDateString.split('-').map(Number);
   const date = new Date(y, m - 1, d);
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 }
 
 export function escapeHtml(str) {

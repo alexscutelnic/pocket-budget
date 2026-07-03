@@ -15,6 +15,7 @@ import {
 } from '../db.js';
 import { todayISODateString } from '../period.js';
 import { formatMoney, parseAmountToMinor, currencySymbol, setCurrency, escapeHtml } from '../format.js';
+import { t, onDay, dayOrdinal, dateLocale, LANGUAGES } from '../i18n.js';
 import { icon, CATEGORY_ICON_KEYS } from '../icons.js';
 import { paletteColor, labelInkForIndex, nextColorIndex, PALETTE } from '../palette.js';
 
@@ -31,18 +32,12 @@ const CURRENCIES = [
   { code: 'ZAR', name: 'South African Rand' },
 ];
 
-function ordinal(n) {
-  const suffixes = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]}`;
-}
-
 export async function mount(root) {
   let settings = await getSettings();
   let categories = await listCategories();
   let subscriptions = await listSubscriptions();
 
-  let sheet = null; // { type: 'income' | 'reset-day' | 'category' | 'currency' | 'subscription', ... }
+  let sheet = null; // { type: 'income' | 'reset-day' | 'category' | 'currency' | 'language' | 'subscription', ... }
 
   async function reloadData() {
     settings = await getSettings();
@@ -61,56 +56,62 @@ export async function mount(root) {
   }
 
   function renderScreen() {
+    const currentLanguage = LANGUAGES.find((l) => l.code === (settings.language || 'en')) || LANGUAGES[0];
     return `
       <div class="large-title-header">
-        <h1 class="title">Settings</h1>
+        <h1 class="title">${t('Settings')}</h1>
       </div>
 
-      <div class="card-header">Budget</div>
+      <div class="card-header">${t('Budget')}</div>
       <div class="card">
         <div class="list-row tappable" data-action="edit-income">
-          <div style="flex:1;">Monthly Income</div>
-          <div style="color:var(--label-secondary);">${settings.incomeMinor > 0 ? formatMoney(settings.incomeMinor) : 'Not set'}</div>
+          <div style="flex:1;">${t('Monthly Income')}</div>
+          <div style="color:var(--label-secondary);">${settings.incomeMinor > 0 ? formatMoney(settings.incomeMinor) : t('Not set')}</div>
           <span class="chevron">${icon('chevron', { size: 16 })}</span>
         </div>
         <div class="list-row tappable" data-action="edit-reset-day">
-          <div style="flex:1;">Reset Day</div>
-          <div style="color:var(--label-secondary);">${ordinal(settings.resetDay)}</div>
+          <div style="flex:1;">${t('Reset Day')}</div>
+          <div style="color:var(--label-secondary);">${dayOrdinal(settings.resetDay)}</div>
           <span class="chevron">${icon('chevron', { size: 16 })}</span>
         </div>
         <div class="list-row tappable" data-action="edit-currency">
-          <div style="flex:1;">Currency</div>
+          <div style="flex:1;">${t('Currency')}</div>
           <div style="color:var(--label-secondary);">${settings.currency} (${currencySymbol(settings.currency)})</div>
           <span class="chevron">${icon('chevron', { size: 16 })}</span>
         </div>
+        <div class="list-row tappable" data-action="edit-language">
+          <div style="flex:1;">${t('Language')}</div>
+          <div style="color:var(--label-secondary);">${currentLanguage.name}</div>
+          <span class="chevron">${icon('chevron', { size: 16 })}</span>
+        </div>
       </div>
 
-      <div class="card-header">Categories</div>
+      <div class="card-header">${t('Categories')}</div>
       <div class="card">${renderCategoryRows()}</div>
 
-      <div class="card-header">Subscriptions</div>
+      <div class="card-header">${t('Subscriptions')}</div>
       <div class="card">${renderSubscriptionRows()}</div>
-      <p class="field-label" style="padding:0 16px;">Charged automatically to their category each time you open the app on or after the billing day.</p>
+      <p class="field-label" style="padding:0 16px;">${t('Charged automatically to their category each time you open the app on or after the billing day.')}</p>
 
-      <div class="card-header">Data</div>
+      <div class="card-header">${t('Data')}</div>
       <div class="card">
         <div class="list-row tappable" data-action="export-data">
-          <div style="flex:1;">Export Data</div>
+          <div style="flex:1;">${t('Export Data')}</div>
           <span class="chevron">${icon('chevron', { size: 16 })}</span>
         </div>
         <div class="list-row tappable" data-action="trigger-import">
-          <div style="flex:1;">Import Data</div>
+          <div style="flex:1;">${t('Import Data')}</div>
           <span class="chevron">${icon('chevron', { size: 16 })}</span>
         </div>
       </div>
-      <p class="field-label" style="padding:0 16px;">Last backup: ${settings.lastExportAt ? new Date(settings.lastExportAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'}</p>
+      <p class="field-label" style="padding:0 16px;">${t('Last backup: {date}', { date: settings.lastExportAt ? new Date(settings.lastExportAt).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : t('Never') })}</p>
       <input type="file" id="import-file-input" accept="application/json,.json" style="display:none" />
 
-      <div class="card-header">About</div>
+      <div class="card-header">${t('About')}</div>
       <div class="card">
         <div class="list-row">
           <div style="flex:1;">Pocket Budget</div>
-          <div style="color:var(--label-secondary);">v1.1</div>
+          <div style="color:var(--label-secondary);">v1.2</div>
         </div>
       </div>
     `;
@@ -122,7 +123,7 @@ export async function mount(root) {
         <div class="icon-bubble" style="background:${paletteColor(c.colorIndex)}">${icon(c.icon)}</div>
         <div style="flex:1;min-width:0;">
           <div>${escapeHtml(c.name)}</div>
-          <div style="font-size:13px;color:var(--label-secondary);">${formatMoney(c.limitMinor)} per period</div>
+          <div style="font-size:13px;color:var(--label-secondary);">${t('{amount} per period', { amount: formatMoney(c.limitMinor) })}</div>
         </div>
         ${i > 0 ? `<button class="reorder-btn" data-action="move-category-up" data-category-id="${c.id}" aria-label="Move up" style="transform:rotate(-90deg);">${icon('chevron', { size: 16 })}</button>` : `<span class="reorder-btn"></span>`}
         ${i < categories.length - 1 ? `<button class="reorder-btn" data-action="move-category-down" data-category-id="${c.id}" aria-label="Move down" style="transform:rotate(90deg);">${icon('chevron', { size: 16 })}</button>` : `<span class="reorder-btn"></span>`}
@@ -131,7 +132,7 @@ export async function mount(root) {
     const addRow = `
       <div class="list-row tappable" data-action="add-category">
         <div class="icon-bubble" style="background:var(--fill-quaternary);color:var(--blue);">${icon('plus')}</div>
-        <div style="color:var(--blue);font-weight:500;">Add Category</div>
+        <div style="color:var(--blue);font-weight:500;">${t('Add Category')}</div>
       </div>`;
 
     return rows + addRow;
@@ -145,9 +146,9 @@ export async function mount(root) {
         <div class="icon-bubble" style="background:${cat ? paletteColor(cat.colorIndex) : 'var(--fill-quaternary)'}">${icon(cat ? cat.icon : 'doc-text')}</div>
         <div style="flex:1;min-width:0;">
           <div>${escapeHtml(s.name)}</div>
-          <div style="font-size:13px;color:var(--label-secondary);">${formatMoney(s.amountMinor)} on the ${ordinal(s.dayOfMonth)} · ${cat ? escapeHtml(cat.name) : 'Uncategorized'}</div>
+          <div style="font-size:13px;color:var(--label-secondary);">${formatMoney(s.amountMinor)} ${onDay(s.dayOfMonth)} · ${cat ? escapeHtml(cat.name) : t('Uncategorized')}</div>
         </div>
-        <div style="font-size:13px;color:var(--label-secondary);flex-shrink:0;">${formatMoney(s.amountMinor * 12)}/yr</div>
+        <div style="font-size:13px;color:var(--label-secondary);flex-shrink:0;">${t('{amount}/yr', { amount: formatMoney(s.amountMinor * 12) })}</div>
         <span class="chevron">${icon('chevron', { size: 16 })}</span>
       </div>`;
     }).join('');
@@ -157,14 +158,14 @@ export async function mount(root) {
     const monthlyTotal = subscriptions.reduce((sum, s) => sum + s.amountMinor, 0);
     const totalRow = subscriptions.length > 0 ? `
       <div class="list-row">
-        <div style="flex:1;font-weight:600;">Total</div>
-        <div style="font-weight:600;">${formatMoney(monthlyTotal)}/mo · ${formatMoney(monthlyTotal * 12)}/yr</div>
+        <div style="flex:1;font-weight:600;">${t('Total')}</div>
+        <div style="font-weight:600;">${t('{monthly}/mo · {yearly}/yr', { monthly: formatMoney(monthlyTotal), yearly: formatMoney(monthlyTotal * 12) })}</div>
       </div>` : '';
 
     const addRow = `
       <div class="list-row tappable" data-action="add-subscription">
         <div class="icon-bubble" style="background:var(--fill-quaternary);color:var(--blue);">${icon('plus')}</div>
-        <div style="color:var(--blue);font-weight:500;">Add Subscription</div>
+        <div style="color:var(--blue);font-weight:500;">${t('Add Subscription')}</div>
       </div>`;
 
     return rows + totalRow + addRow;
@@ -180,7 +181,7 @@ export async function mount(root) {
   function renderCurrencySheet() {
     const rows = CURRENCIES.map((c) => `
       <div class="list-row tappable" data-action="select-currency" data-code="${c.code}">
-        <div style="flex:1;">${c.name} <span style="color:var(--label-secondary);">(${currencySymbol(c.code)})</span></div>
+        <div style="flex:1;">${t(c.name)} <span style="color:var(--label-secondary);">(${currencySymbol(c.code)})</span></div>
         ${c.code === settings.currency ? icon('checkmark', { size: 18 }) : ''}
       </div>`).join('');
 
@@ -188,7 +189,7 @@ export async function mount(root) {
       <div class="sheet-backdrop">
         <div class="sheet">
           <div class="sheet-header">
-            <h2>Currency</h2>
+            <h2>${t('Currency')}</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
           <div class="card" style="margin:0 16px 16px;">${rows}</div>
@@ -206,6 +207,42 @@ export async function mount(root) {
     window.location.reload();
   }
 
+  // ---- Language sheet -------------------------------------------------------
+
+  function openLanguageSheet() {
+    sheet = { type: 'language' };
+    render();
+  }
+
+  function renderLanguageSheet() {
+    // Each language is shown in its own name — recognizable even when the
+    // app is currently in a language the user can't read.
+    const rows = LANGUAGES.map((l) => `
+      <div class="list-row tappable" data-action="select-language" data-code="${l.code}">
+        <div style="flex:1;">${l.name}</div>
+        ${l.code === (settings.language || 'en') ? icon('checkmark', { size: 18 }) : ''}
+      </div>`).join('');
+
+    return `
+      <div class="sheet-backdrop">
+        <div class="sheet">
+          <div class="sheet-header">
+            <h2>${t('Language')}</h2>
+            <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
+          </div>
+          <div class="card" style="margin:0 16px 16px;">${rows}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function selectLanguage(code) {
+    await updateSettings({ language: code });
+    sheet = null;
+    // Reload so every mounted screen re-renders in the new language.
+    window.location.reload();
+  }
+
   // ---- Income sheet -----------------------------------------------------
 
   function openIncomeSheet() {
@@ -219,11 +256,11 @@ export async function mount(root) {
       <div class="sheet-backdrop">
         <div class="sheet">
           <div class="sheet-header">
-            <h2>Monthly Income</h2>
+            <h2>${t('Monthly Income')}</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
           <input id="income-amount" class="amount-input" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${value}" />
-          <button id="income-save" class="save-btn" data-action="save-income">Save</button>
+          <button id="income-save" class="save-btn" data-action="save-income">${t('Save')}</button>
         </div>
       </div>
     `;
@@ -250,14 +287,14 @@ export async function mount(root) {
       <div class="sheet-backdrop">
         <div class="sheet">
           <div class="sheet-header">
-            <h2>Reset Day</h2>
+            <h2>${t('Reset Day')}</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
           <div class="field-group">
-            <p class="field-label">Day of month your pay cycle resets (1–31)</p>
+            <p class="field-label">${t('Day of month your pay cycle resets (1–31)')}</p>
             <input id="reset-day-input" type="text" inputmode="numeric" value="${sheet.defaults.day}" />
           </div>
-          <button id="reset-day-save" class="save-btn" data-action="save-reset-day">Save</button>
+          <button id="reset-day-save" class="save-btn" data-action="save-reset-day">${t('Save')}</button>
         </div>
       </div>
     `;
@@ -304,34 +341,34 @@ export async function mount(root) {
       <div class="sheet-backdrop">
         <div class="sheet">
           <div class="sheet-header">
-            <h2>${sheet.mode === 'edit' ? 'Edit Category' : 'New Category'}</h2>
+            <h2>${sheet.mode === 'edit' ? t('Edit Category') : t('New Category')}</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
 
           <div class="field-group">
-            <p class="field-label">Name</p>
-            <input id="cat-name" type="text" placeholder="e.g. Groceries" value="${escapeHtml(sheet.defaults.name)}" />
+            <p class="field-label">${t('Name')}</p>
+            <input id="cat-name" type="text" placeholder="${t('e.g. Groceries')}" value="${escapeHtml(sheet.defaults.name)}" />
             <p id="cat-name-warning" class="field-warning"></p>
           </div>
 
           <div class="field-group">
-            <p class="field-label">Icon</p>
+            <p class="field-label">${t('Icon')}</p>
           </div>
           <div class="category-picker">${icons}</div>
 
           <div class="field-group" style="margin-top:12px;">
-            <p class="field-label">Color</p>
+            <p class="field-label">${t('Color')}</p>
           </div>
           <div class="color-picker">${swatches}</div>
 
           <div class="field-group" style="margin-top:12px;">
-            <p class="field-label">Limit per period</p>
+            <p class="field-label">${t('Limit per period')}</p>
             <input id="cat-limit" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${limitValue}" />
             <p id="cat-limit-warning" class="field-warning"></p>
           </div>
 
-          <button id="cat-save" class="save-btn" data-action="save-category">Save</button>
-          ${sheet.mode === 'edit' ? `<div class="row-actions" style="margin-top:10px;"><button class="destructive" data-action="archive-category-in-sheet">${icon('trash')} Archive Category</button></div>` : ''}
+          <button id="cat-save" class="save-btn" data-action="save-category">${t('Save')}</button>
+          ${sheet.mode === 'edit' ? `<div class="row-actions" style="margin-top:10px;"><button class="destructive" data-action="archive-category-in-sheet">${icon('trash')} ${t('Archive Category')}</button></div>` : ''}
         </div>
       </div>
     `;
@@ -360,7 +397,7 @@ export async function mount(root) {
   }
 
   async function archiveCurrentCategory() {
-    if (!window.confirm('Archive this category? It will be hidden from Home, but its past transactions are kept.')) return;
+    if (!window.confirm(t('Archive this category? It will be hidden from Home, but its past transactions are kept.'))) return;
     await archiveCategory(sheet.categoryId);
     sheet = null;
     await reloadData();
@@ -411,32 +448,32 @@ export async function mount(root) {
       <div class="sheet-backdrop">
         <div class="sheet">
           <div class="sheet-header">
-            <h2>${sheet.mode === 'edit' ? 'Edit Subscription' : 'New Subscription'}</h2>
+            <h2>${sheet.mode === 'edit' ? t('Edit Subscription') : t('New Subscription')}</h2>
             <button class="sheet-close" data-action="close-sheet">${icon('xmark')}</button>
           </div>
 
           <div class="field-group">
-            <p class="field-label">Name</p>
-            <input id="sub-name" type="text" placeholder="e.g. Gym" value="${escapeHtml(sheet.defaults.name)}" />
+            <p class="field-label">${t('Name')}</p>
+            <input id="sub-name" type="text" placeholder="${t('e.g. Gym')}" value="${escapeHtml(sheet.defaults.name)}" />
           </div>
 
           <div class="field-group">
-            <p class="field-label">Category</p>
+            <p class="field-label">${t('Category')}</p>
           </div>
           <div class="category-picker">${chips}</div>
 
           <div class="field-group" style="margin-top:12px;">
-            <p class="field-label">Amount per month</p>
+            <p class="field-label">${t('Amount per month')}</p>
             <input id="sub-amount" type="text" inputmode="decimal" placeholder="${currencySymbol()}0.00" value="${amountValue}" />
           </div>
 
           <div class="field-group">
-            <p class="field-label">Billing day (1–31)</p>
+            <p class="field-label">${t('Billing day (1–31)')}</p>
             <input id="sub-day" type="text" inputmode="numeric" value="${sheet.defaults.dayOfMonth}" />
           </div>
 
-          <button id="sub-save" class="save-btn" data-action="save-subscription">Save</button>
-          ${sheet.mode === 'edit' ? `<div class="row-actions" style="margin-top:10px;"><button class="destructive" data-action="archive-subscription-in-sheet">${icon('trash')} Archive Subscription</button></div>` : ''}
+          <button id="sub-save" class="save-btn" data-action="save-subscription">${t('Save')}</button>
+          ${sheet.mode === 'edit' ? `<div class="row-actions" style="margin-top:10px;"><button class="destructive" data-action="archive-subscription-in-sheet">${icon('trash')} ${t('Archive Subscription')}</button></div>` : ''}
         </div>
       </div>
     `;
@@ -465,7 +502,7 @@ export async function mount(root) {
   }
 
   async function archiveCurrentSubscription() {
-    if (!window.confirm('Archive this subscription? It will stop creating new transactions automatically.')) return;
+    if (!window.confirm(t('Archive this subscription? It will stop creating new transactions automatically.'))) return;
     await archiveSubscription(sheet.subscriptionId);
     sheet = null;
     await reloadData();
@@ -498,14 +535,14 @@ export async function mount(root) {
     try {
       data = JSON.parse(text);
     } catch {
-      window.alert('That file is not valid JSON.');
+      window.alert(t('That file is not valid JSON.'));
       return;
     }
     if (!data || typeof data !== 'object' || !('schemaVersion' in data)) {
-      window.alert("That doesn't look like a Pocket Budget export file.");
+      window.alert(t("That doesn't look like a Pocket Budget export file."));
       return;
     }
-    if (!window.confirm('Importing will overwrite all data currently on this device. Continue?')) return;
+    if (!window.confirm(t('Importing will overwrite all data currently on this device. Continue?'))) return;
     await importAll(data);
     window.location.reload();
   }
@@ -514,6 +551,7 @@ export async function mount(root) {
 
   function renderSheet() {
     if (sheet.type === 'currency') return renderCurrencySheet();
+    if (sheet.type === 'language') return renderLanguageSheet();
     if (sheet.type === 'income') return renderIncomeSheet();
     if (sheet.type === 'reset-day') return renderResetDaySheet();
     if (sheet.type === 'subscription') return renderSubscriptionSheet();
@@ -536,7 +574,7 @@ export async function mount(root) {
       const btn = root.querySelector('#cat-save');
       const duplicate = isDuplicateName(name);
       const nameWarningEl = root.querySelector('#cat-name-warning');
-      if (nameWarningEl) nameWarningEl.textContent = duplicate ? `A category named "${name}" already exists.` : '';
+      if (nameWarningEl) nameWarningEl.textContent = duplicate ? t('A category named "{name}" already exists.', { name }) : '';
       if (btn) btn.disabled = !name || limit == null || limit <= 0 || duplicate;
       updateLimitWarning(limit);
     } else if (sheet.type === 'subscription') {
@@ -560,7 +598,7 @@ export async function mount(root) {
       .reduce((sum, c) => sum + c.limitMinor, 0);
     const newTotal = otherLimitsTotal + limitMinor;
     if (newTotal > settings.incomeMinor) {
-      warningEl.textContent = `Category limits would total ${formatMoney(newTotal)} of ${formatMoney(settings.incomeMinor)} income.`;
+      warningEl.textContent = t('Category limits would total {total} of {income} income.', { total: formatMoney(newTotal), income: formatMoney(settings.incomeMinor) });
     } else {
       warningEl.textContent = '';
     }
@@ -582,6 +620,8 @@ export async function mount(root) {
     if (action === 'close-sheet') { sheet = null; return render(); }
     if (action === 'edit-currency') return openCurrencySheet();
     if (action === 'select-currency') return selectCurrency(actionEl.dataset.code);
+    if (action === 'edit-language') return openLanguageSheet();
+    if (action === 'select-language') return selectLanguage(actionEl.dataset.code);
     if (action === 'edit-income') return openIncomeSheet();
     if (action === 'save-income') return saveIncomeSheet();
     if (action === 'edit-reset-day') return openResetDaySheet();
